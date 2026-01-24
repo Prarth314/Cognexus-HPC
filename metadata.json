@@ -1,0 +1,7 @@
+{
+  "name": "Cognexus",
+  "description": "A collaborative research platform for joining academic, government, and private projects with integrated high-performance computing management and AI-powered simulation analysis.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
