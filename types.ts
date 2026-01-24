@@ -1,5 +1,14 @@
 
 export type ProjectType = 'University' | 'Government' | 'Private';
+export type AccessLevel = 'Owner' | 'Collaborator';
+
+export interface TeamMember {
+  id: string;
+  name: string;
+  role: string; // Descriptive title like "Lead Researcher"
+  accessLevel: AccessLevel; // Permission role
+  avatar?: string;
+}
 
 export interface Project {
   id: string;
@@ -8,6 +17,8 @@ export interface Project {
   organization: string;
   description: string;
   members: number;
+  team: TeamMember[];
+  ownerId: string; // The primary creator/admin
   tags: string[];
 }
 

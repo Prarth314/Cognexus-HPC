@@ -9,11 +9,11 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "@google/genai": "^1.38.0",
     "recharts": "^3.7.0",
-    "lucide-react": "^0.563.0",
-    "react": "^19.2.3"
+    "lucide-react": "^0.563.0"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
