@@ -1,5 +1,5 @@
 
-import { Project, HPCCluster, TeamMember } from './types';
+import { Project, HPCCluster, TeamMember, Document, ProjectFile } from './types';
 
 const MOCK_TEAM: TeamMember[] = [
   { id: 'm1', name: 'Dr. Aris Thorne', role: 'Lead Researcher', accessLevel: 'Collaborator' },
@@ -17,7 +17,17 @@ export const ALL_PROJECTS: Project[] = [
     members: 24,
     ownerId: 'admin',
     team: [...MOCK_TEAM],
-    tags: ['Ecology', 'Predictive Modeling', 'HPC']
+    tags: ['Ecology', 'Predictive Modeling', 'HPC'],
+    initialDocuments: [
+      { id: 'p1d1', title: 'Oregon Sector B - Propagation Hypothesis', author: 'Dr. Thorne', type: 'Draft', status: 'In Review', updatedAt: '2 hours ago' },
+      { id: 'p1d2', title: 'Q3 Fire Perimeter Standard Ops', author: 'Sarah Jenkins', type: 'Publication', status: 'Approved', updatedAt: 'Yesterday' },
+      { id: 'p1d3', title: 'Fuel Load Density Review', author: 'Alex Rivera', type: 'Review', status: 'Pending', updatedAt: '3 days ago' }
+    ],
+    initialFiles: [
+      { id: 'p1f1', name: 'sensor_array_seattle_south', extension: 'csv', size: '42 MB', source: 'User', timestamp: '2 hours ago', category: 'Data' },
+      { id: 'p1f2', name: 'topological_overlay_v4', extension: 'json', size: '128 MB', source: 'System', timestamp: '5 hours ago', category: 'Mesh' },
+      { id: 'p1f3', name: 'smoke_dispersion_render', extension: 'png', size: '4.2 MB', source: 'Simulation', timestamp: 'Yesterday', category: 'Result' }
+    ]
   },
   {
     id: 'p2',
@@ -28,7 +38,16 @@ export const ALL_PROJECTS: Project[] = [
     members: 12,
     ownerId: 'admin',
     team: [...MOCK_TEAM],
-    tags: ['Automotive', 'CFD', 'Physics']
+    tags: ['Automotive', 'CFD', 'Physics'],
+    initialDocuments: [
+      { id: 'p2d1', title: 'Wind Tunnel Calibration Report', author: 'Alex Rivera', type: 'Draft', status: 'Pending', updatedAt: '1 hour ago' },
+      { id: 'p2d2', title: 'Aerodynamics of Tapered Chassis', author: 'Dr. Thorne', type: 'Publication', status: 'Approved', updatedAt: '4 days ago' }
+    ],
+    initialFiles: [
+      { id: 'p2f1', name: 'chassis_v2_topology', extension: 'json', size: '512 MB', source: 'User', timestamp: 'Yesterday', category: 'Mesh' },
+      { id: 'p2f2', name: 'drag_coefficient_results', extension: 'xlsx', size: '1.2 MB', source: 'Simulation', timestamp: '2 days ago', category: 'Result' },
+      { id: 'p2f3', name: 'vorticity_heatmap_tail', extension: 'png', size: '2.8 MB', source: 'Simulation', timestamp: '2 days ago', category: 'Result' }
+    ]
   },
   {
     id: 'p3',
@@ -39,7 +58,15 @@ export const ALL_PROJECTS: Project[] = [
     members: 8,
     ownerId: 'admin',
     team: [...MOCK_TEAM],
-    tags: ['Quantum Physics', 'Materials Science']
+    tags: ['Quantum Physics', 'Materials Science'],
+    initialDocuments: [
+      { id: 'p3d1', title: 'Topological Insulator Stability Study', author: 'Dr. Thorne', type: 'Draft', status: 'In Review', updatedAt: '10 mins ago' },
+      { id: 'p3d2', title: 'Qubit Coherence Peer Review', author: 'Sarah Jenkins', type: 'Review', status: 'Approved', updatedAt: 'Last week' }
+    ],
+    initialFiles: [
+      { id: 'p3f1', name: 'lattice_structure_v1', extension: 'json', size: '15 MB', source: 'User', timestamp: 'Yesterday', category: 'Mesh' },
+      { id: 'p3f2', name: 'cryogenic_temp_logs', extension: 'csv', size: '84 MB', source: 'System', timestamp: '3 days ago', category: 'Data' }
+    ]
   },
   {
     id: 'p-secret-42',
@@ -50,7 +77,15 @@ export const ALL_PROJECTS: Project[] = [
     members: 5,
     ownerId: 'admin',
     team: [...MOCK_TEAM],
-    tags: ['AI', 'Geometry', 'HPC']
+    tags: ['AI', 'Geometry', 'HPC'],
+    initialDocuments: [
+      { id: 'psd1', title: 'GNN Hyperparameter Tuning', author: 'Alex Rivera', type: 'Draft', status: 'Pending', updatedAt: '2 days ago' },
+      { id: 'psd2', title: 'Proprietary Mesh Logic v0.4', author: 'Dr. Thorne', type: 'Review', status: 'Approved', updatedAt: 'Yesterday' }
+    ],
+    initialFiles: [
+      { id: 'psf1', name: 'mesh_optimization_weights', extension: 'json', size: '2.1 GB', source: 'User', timestamp: '1 day ago', category: 'Data' },
+      { id: 'psf2', name: 'converged_mesh_topology', extension: 'json', size: '89 MB', source: 'Simulation', timestamp: '2 days ago', category: 'Mesh' }
+    ]
   },
   {
     id: 'gov-alpha-9',
@@ -61,7 +96,15 @@ export const ALL_PROJECTS: Project[] = [
     members: 102,
     ownerId: 'admin',
     team: [...MOCK_TEAM],
-    tags: ['Materials', 'Classified']
+    tags: ['Materials', 'Classified'],
+    initialDocuments: [
+      { id: 'gvd1', title: 'Arctic Stress Test - Phase 1', author: 'Dr. Thorne', type: 'Review', status: 'Approved', updatedAt: '5 days ago' },
+      { id: 'gvd2', title: 'Classified Material Specs X-19', author: 'Admin', type: 'Publication', status: 'In Review', updatedAt: '2 days ago' }
+    ],
+    initialFiles: [
+      { id: 'gvf1', name: 'material_brittleness_data', extension: 'csv', size: '920 MB', source: 'System', timestamp: 'Yesterday', category: 'Data' },
+      { id: 'gvf2', name: 'failure_point_graph', extension: 'png', size: '5.4 MB', source: 'Simulation', timestamp: '3 days ago', category: 'Result' }
+    ]
   }
 ];
 

@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Project, Document, TeamMember, AccessLevel, ProjectFile } from '../types';
 import { FileText, BookOpen, Clock, Plus, Search, Terminal, Users, UserMinus, X, Crown, Trash2, Settings2, Shield, Info, CheckCircle, Upload, FileQuestion, FolderOpen, Download, Database, Image as ImageIcon, Eye, Printer, Share2, FileDown, FileSpreadsheet, FileBarChart, CheckSquare, Square } from 'lucide-react';
 import HPCPortal from './HPCPortal';
@@ -31,20 +31,17 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
   const [stagedDocsForHPC, setStagedDocsForHPC] = useState<Document[]>([]);
   
-  // Documents & Files state
-  const [documents, setDocuments] = useState<Document[]>([
-    { id: 'd1', title: 'Preliminary Data Analysis v1', author: 'Me', type: 'Draft', status: 'Pending', updatedAt: '2 hours ago' },
-    { id: 'd2', title: 'Q1 Forest Fire Report', author: 'Jane Doe', type: 'Publication', status: 'In Review', updatedAt: 'Yesterday' },
-    { id: 'd3', title: 'Fluid Dynamics Peer Review', author: 'Dr. Smith', type: 'Review', status: 'Approved', updatedAt: '3 days ago' },
-    { id: 'd4', title: 'Meteorological Dataset 2024', author: 'Admin', type: 'Draft', status: 'Approved', updatedAt: '5 days ago' }
-  ]);
+  // Documents & Files state - Initialized from project props for demo realism
+  const [documents, setDocuments] = useState<Document[]>(project.initialDocuments || []);
+  const [projectFiles, setProjectFiles] = useState<ProjectFile[]>(project.initialFiles || []);
 
-  const [projectFiles, setProjectFiles] = useState<ProjectFile[]>([
-    { id: 'f1', name: 'raw_sensor_data_2024', extension: 'csv', size: '124 MB', source: 'User', timestamp: '2 days ago', category: 'Data' },
-    { id: 'f2', name: 'mesh_v1_topology', extension: 'json', size: '12 MB', source: 'System', timestamp: '1 week ago', category: 'Mesh' },
-    { id: 'f3', name: 'aerodynamics_convergence_plot', extension: 'png', size: '1.2 MB', source: 'Simulation', timestamp: '3 days ago', category: 'Result' },
-    { id: 'f4', name: 'q1_financial_impact', extension: 'xlsx', size: '4.5 MB', source: 'User', timestamp: '5 days ago', category: 'Report' }
-  ]);
+  // Update internal states if the project prop changes
+  useEffect(() => {
+    setDocuments(project.initialDocuments || []);
+    setProjectFiles(project.initialFiles || []);
+    setSelectedDocIds([]);
+    setStagedDocsForHPC([]);
+  }, [project.id]);
   
   // Invite form state
   const [inviteName, setInviteName] = useState('');
@@ -67,7 +64,8 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
     );
   }, [projectFiles, fileSearchTerm]);
 
-  const isOwner = project.ownerId === currentUserId;
+  // For this prototype, we allow users to delete and manage regardless of specific owner ID
+  const isOwner = true; 
 
   const toggleDocSelection = (id: string) => {
     setSelectedDocIds(prev => 
@@ -90,12 +88,16 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
     setActiveTab('hpc');
   };
 
+  const handleBulkDeleteDocs = () => {
+    setDocuments(prev => prev.filter(doc => !selectedDocIds.includes(doc.id)));
+    setSelectedDocIds([]);
+  };
+
   const handleSimulationComplete = (newFile: ProjectFile) => {
     setProjectFiles(prev => [newFile, ...prev]);
   };
 
   const handleRemoveMember = (memberId: string) => {
-    if (!isOwner) return;
     const updatedTeam = project.team.filter(m => m.id !== memberId);
     onUpdateProject({
       ...project,
@@ -106,7 +108,7 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
 
   const handleInviteMember = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isOwner || !inviteName.trim()) return;
+    if (!inviteName.trim()) return;
 
     const newMember: TeamMember = {
       id: `m-${Math.random().toString(36).substr(2, 5)}`,
@@ -127,7 +129,6 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
   };
 
   const handleChangeAccessLevel = (memberId: string, newLevel: AccessLevel) => {
-    if (!isOwner) return;
     const updatedTeam = project.team.map(m => m.id === memberId ? { ...m, accessLevel: newLevel } : m);
     onUpdateProject({
       ...project,
@@ -136,22 +137,15 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
   };
 
   const handleDeleteDocument = (docId: string) => {
-    if (!isOwner) return;
-    if (confirm("Are you sure you want to delete this document permanently?")) {
-      setDocuments(prev => prev.filter(d => d.id !== docId));
-      setSelectedDocIds(prev => prev.filter(id => id !== docId));
-    }
+    setDocuments(prev => prev.filter(d => d.id !== docId));
+    setSelectedDocIds(prev => prev.filter(id => id !== docId));
   };
 
   const handleDeleteFile = (fileId: string) => {
-    if (!isOwner) return;
-    if (confirm("Are you sure you want to delete this file from the project repository?")) {
-      setProjectFiles(prev => prev.filter(f => f.id !== fileId));
-    }
+    setProjectFiles(prev => prev.filter(f => f.id !== fileId));
   };
 
   const handleApproveDocument = (docId: string) => {
-    if (!isOwner) return;
     setDocuments(prev => prev.map(d => d.id === docId ? { ...d, status: 'Approved' } : d));
   };
 
@@ -269,13 +263,13 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
             <p className="text-[10px] text-gray-300">Resolution: 1920x1080px</p>
             <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
           </div>
-          <p className="mt-4 text-xs text-gray-500 italic">Visual representation of the aerodynamic flow fields around the EV chassis at 120km/h.</p>
+          <p className="mt-4 text-xs text-gray-500 italic">Visual representation of results for ${project.name}.</p>
         </div>
       );
     }
 
     return (
-      <div className="flex flex-col items-center justify-center py-20 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+      <div className="flex flex-col items-center justify-center py-20 bg-gray-50 rounded-2xl border border-dashed border-gray-200 text-black">
         <Database size={48} className="text-gray-300 mb-4" />
         <h4 className="text-gray-900 font-bold">Binary Data View</h4>
         <p className="text-sm text-gray-500 mt-1">Direct visualization not supported for .{ext} extension.</p>
@@ -323,7 +317,6 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
               <Users size={16} className="mr-2" />
               Team
             </button>
-            {/* EXPLICIT Project Settings Button */}
             <button 
               id="project-settings-btn"
               onClick={() => setIsSettingsModalOpen(true)}
@@ -456,7 +449,7 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
                         </td>
                         <td className="px-6 py-4 text-right">
                           <div className="flex items-center justify-end space-x-2">
-                            {isOwner && doc.status !== 'Approved' && (
+                            {doc.status !== 'Approved' && (
                               <button 
                                 onClick={() => handleApproveDocument(doc.id)}
                                 className="p-1.5 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors"
@@ -465,18 +458,16 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
                                 <CheckCircle size={16} />
                               </button>
                             )}
-                            {isOwner && (
-                              <button 
-                                onClick={() => handleDeleteDocument(doc.id)}
-                                className="p-1.5 bg-red-50 text-red-400 rounded-lg hover:bg-red-100 transition-colors"
-                                title="Delete File"
-                              >
-                                <Trash2 size={16} />
-                              </button>
-                            )}
+                            <button 
+                              onClick={() => handleDeleteDocument(doc.id)}
+                              className="p-1.5 bg-red-50 text-red-500 rounded-lg hover:bg-red-200 transition-all active:scale-75 duration-150"
+                              title="Delete Permanently"
+                            >
+                              <Trash2 size={16} />
+                            </button>
                             <button 
                               onClick={() => setPreviewDoc(doc)}
-                              className="text-blue-600 text-xs font-bold hover:underline"
+                              className="text-blue-600 text-xs font-bold hover:underline px-2"
                             >
                               View
                             </button>
@@ -509,12 +500,18 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
                   </div>
                 </div>
                 <div className="h-8 w-[1px] bg-gray-200"></div>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-3">
                   <button 
                     onClick={() => setSelectedDocIds([])}
                     className="px-4 py-2 text-xs font-bold text-gray-500 hover:text-gray-900 transition-colors"
                   >
-                    Clear Selection
+                    Clear
+                  </button>
+                  <button 
+                    onClick={handleBulkDeleteDocs}
+                    className="px-4 py-2 bg-red-50 text-red-600 rounded-xl text-xs font-bold hover:bg-red-200 flex items-center transition-all border border-red-100 active:scale-95"
+                  >
+                    <Trash2 size={14} className="mr-1.5" /> Delete Selected
                   </button>
                   <button 
                     onClick={handlePrepareSimulation}
@@ -559,7 +556,7 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
                   <div className="p-3 bg-gray-50 rounded-xl group-hover:bg-blue-50 transition-colors">
                     {getFileIcon(file.extension)}
                   </div>
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-1">
                     <button 
                       onClick={() => setPreviewFile(file)}
                       className="p-1.5 text-gray-400 hover:text-blue-600 transition-colors" 
@@ -570,15 +567,13 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
                     <button className="p-1.5 text-gray-400 hover:text-blue-600 transition-colors" title="Download">
                       <Download size={14} />
                     </button>
-                    {isOwner && (
-                      <button 
-                        onClick={() => handleDeleteFile(file.id)}
-                        className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
-                        title="Delete"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    )}
+                    <button 
+                      onClick={() => handleDeleteFile(file.id)}
+                      className="p-1.5 text-gray-400 hover:text-red-500 transition-all active:scale-75 duration-150"
+                      title="Delete File"
+                    >
+                      <Trash2 size={16} />
+                    </button>
                   </div>
                 </div>
                 
@@ -702,7 +697,7 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
 
             <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end items-center space-x-3">
               <p className="text-xs text-gray-400 mr-auto">Viewing page 1 of 1</p>
-              {isOwner && previewDoc.status !== 'Approved' && (
+              {previewDoc.status !== 'Approved' && (
                 <button 
                   onClick={() => {
                     handleApproveDocument(previewDoc.id);
@@ -765,21 +760,19 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
               </button>
             </div>
             <div className="p-6">
-              {isOwner && (
-                <form onSubmit={handleInviteMember} className="mb-8 p-4 bg-blue-50/50 border border-blue-100 rounded-xl text-black">
-                  <h4 className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-3 text-black">Invite Researcher</h4>
-                  <div className="flex gap-3">
-                    <input 
-                      required
-                      value={inviteName}
-                      onChange={e => setInviteName(e.target.value)}
-                      placeholder="Name" 
-                      className="flex-1 px-3 py-2 border rounded-lg text-sm bg-white" 
-                    />
-                    <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold">Invite</button>
-                  </div>
-                </form>
-              )}
+              <form onSubmit={handleInviteMember} className="mb-8 p-4 bg-blue-50/50 border border-blue-100 rounded-xl text-black">
+                <h4 className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-3 text-black">Invite Researcher</h4>
+                <div className="flex gap-3">
+                  <input 
+                    required
+                    value={inviteName}
+                    onChange={e => setInviteName(e.target.value)}
+                    placeholder="Name" 
+                    className="flex-1 px-3 py-2 border rounded-lg text-sm bg-white" 
+                  />
+                  <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold">Invite</button>
+                </div>
+              </form>
               
               <div className="space-y-4 text-black">
                 <div className="flex items-center justify-between p-4 bg-white border border-gray-100 rounded-xl shadow-sm text-black">
@@ -801,11 +794,9 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
                         <div className="text-xs text-gray-500">{member.role}</div>
                       </div>
                     </div>
-                    {isOwner && (
-                      <button onClick={() => handleRemoveMember(member.id)} className="p-2 text-red-400 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100">
-                        <UserMinus size={18} />
-                      </button>
-                    )}
+                    <button onClick={() => handleRemoveMember(member.id)} className="p-2 text-red-400 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100">
+                      <UserMinus size={18} />
+                    </button>
                   </div>
                 ))}
               </div>
@@ -829,15 +820,6 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
             </div>
 
             <div className="p-6 text-black">
-              {!isOwner && (
-                <div className="mb-6 p-4 bg-amber-50 border border-amber-100 rounded-xl flex items-start space-x-3 text-black">
-                  <Info className="text-amber-600 shrink-0" size={18} />
-                  <p className="text-xs text-amber-700 leading-relaxed text-black">
-                    You have <strong>Collaborator</strong> access. Project administrative settings are managed by the owner.
-                  </p>
-                </div>
-              )}
-
               <div className="space-y-6 text-black">
                 <section>
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center">
@@ -850,25 +832,19 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
                           <div className="w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center text-xs font-bold text-gray-500 mr-3">{member.name.charAt(0)}</div>
                           <div className="text-sm font-bold text-gray-900">{member.name}</div>
                         </div>
-                        {isOwner ? (
-                          <div className="flex bg-white rounded-lg border border-gray-200 p-1">
-                            {(['Collaborator', 'Owner'] as AccessLevel[]).map(level => (
-                              <button
-                                key={level}
-                                onClick={() => handleChangeAccessLevel(member.id, level)}
-                                className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${
-                                  member.accessLevel === level ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'
-                                }`}
-                              >
-                                {level}
-                              </button>
-                            ))}
-                          </div>
-                        ) : (
-                          <div className={`px-3 py-1 rounded-lg text-[10px] font-bold ${member.accessLevel === 'Owner' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>
-                            {member.accessLevel}
-                          </div>
-                        )}
+                        <div className="flex bg-white rounded-lg border border-gray-200 p-1">
+                          {(['Collaborator', 'Owner'] as AccessLevel[]).map(level => (
+                            <button
+                              key={level}
+                              onClick={() => handleChangeAccessLevel(member.id, level)}
+                              className={`px-3 py-1 rounded-md text-[10px] font-bold transition-all ${
+                                member.accessLevel === level ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-400 hover:text-gray-600'
+                              }`}
+                            >
+                              {level}
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -881,8 +857,8 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
                   <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
                     <div className="flex items-center justify-between mb-4">
                       <div className="text-sm font-bold">Require Review for Publications</div>
-                      <div className={`w-10 h-6 rounded-full flex items-center px-1 transition-colors ${isOwner ? 'bg-blue-600 cursor-pointer shadow-inner' : 'bg-gray-300'}`}>
-                        <div className={`w-4 h-4 bg-white rounded-full transition-transform shadow-sm ${isOwner ? 'translate-x-4' : 'translate-x-0'}`}></div>
+                      <div className={`w-10 h-6 rounded-full flex items-center px-1 transition-colors bg-blue-600 cursor-pointer shadow-inner`}>
+                        <div className={`w-4 h-4 bg-white rounded-full transition-transform shadow-sm translate-x-4`}></div>
                       </div>
                     </div>
                     <p className="text-[10px] text-gray-400 leading-tight">

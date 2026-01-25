@@ -21,6 +21,8 @@ export interface Project {
   team: TeamMember[];
   ownerId: string; // The primary creator/admin
   tags: string[];
+  initialDocuments?: Document[];
+  initialFiles?: ProjectFile[];
 }
 
 export interface Document {

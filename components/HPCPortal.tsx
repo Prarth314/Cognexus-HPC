@@ -87,15 +87,24 @@ const HPCPortal: React.FC<Props> = ({ projectName, inputDocs = [], onClearInput,
       ? `\n[INPUT ATTACHED] Files: ${inputDocs.map(d => d.title).join(', ')}` 
       : '';
 
+    // Project-specific log templates
+    const logDetails = projectName.toLowerCase().includes('wildfire') 
+      ? 'Initializing Atmospheric Perimeter Meshes... Solving Wind Dispersion Grids...'
+      : projectName.toLowerCase().includes('ev') || projectName.toLowerCase().includes('aero')
+      ? 'Solving Navier-Stokes CFD Equations... Drag-Coefficient optimization active...'
+      : projectName.toLowerCase().includes('quantum')
+      ? 'Initializing Topological Insulator Lattice... Resolving Qubit Coherence states...'
+      : 'Initializing High-Resolution Meshes... Running specialized scientific solvers...';
+
     const mockLogs = `
 [JOB START] ID: HPC-${Math.floor(Math.random()*10000)}${docContext}
 [CONFIG] Nodes: 128, Threads: 1024
-[STEP 1] Initializing Mesh Grids from Input Data...
-[STEP 2] Solving Navier-Stokes Equations...
-[WARN] Iteration 42: Convergence delay detected.
-[STEP 3] Optimizing parameters...
+[STEP 1] ${logDetails}
+[STEP 2] Multi-node GPU synchronization active.
+[WARN] Iteration 42: Convergence delay detected - applying adaptive stepping.
+[STEP 3] Optimizing parameters for ${projectName}...
 [SUCCESS] Final convergence reached at 1.4e-6
-[EXIT] Exporting result set to Nexus S3.
+[EXIT] Exporting result set to Nexus S3 secure bucket.
     `.trim();
 
     const gpuPerf = "NVIDIA A100 @ 312 TFLOPS (Peak 87%)";
@@ -114,10 +123,10 @@ const HPCPortal: React.FC<Props> = ({ projectName, inputDocs = [], onClearInput,
 
     let generatedFileName = '';
     if (onSimulationComplete) {
-      generatedFileName = `Result_${simulationResult.jobId}_Data_Analysis.xlsx`;
+      generatedFileName = `Result_${simulationResult.jobId}_Analysis_${projectName.replace(/\s+/g, '_')}.xlsx`;
       const generatedFile: ProjectFile = {
         id: `f-sim-${Date.now()}`,
-        name: `Result_${simulationResult.jobId}_Data_Analysis`,
+        name: `Result_${simulationResult.jobId}_Analysis_${projectName.replace(/\s+/g, '_')}`,
         extension: 'xlsx',
         size: '2.4 MB',
         source: 'Simulation',
@@ -181,12 +190,12 @@ const HPCPortal: React.FC<Props> = ({ projectName, inputDocs = [], onClearInput,
   const formatAnalysis = (text: string) => {
     return text.split('\n').map((line, idx) => {
       if (line.startsWith('- ') || line.startsWith('* ')) {
-        return <li key={idx} className="ml-4 mb-1 list-disc">{line.substring(2)}</li>;
+        return <li key={idx} className="ml-4 mb-1 list-disc text-black">{line.substring(2)}</li>;
       }
       if (line.match(/^[A-Z][^a-z]+:$/) || line.includes('###') || line.includes('Interpretation') || line.includes('Takeaway') || line.includes('Finding')) {
         return <h4 key={idx} className="font-bold text-gray-900 mt-4 mb-2 uppercase text-xs tracking-wider border-l-2 border-blue-500 pl-2">{line.replace(/###/g, '').trim()}</h4>;
       }
-      return <p key={idx} className="mb-2 whitespace-pre-wrap">{line}</p>;
+      return <p key={idx} className="mb-2 whitespace-pre-wrap text-black">{line}</p>;
     });
   };
 
@@ -292,10 +301,10 @@ const HPCPortal: React.FC<Props> = ({ projectName, inputDocs = [], onClearInput,
                   <LineChart data={result.dataPoints}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                     <XAxis dataKey="x" stroke="#94a3b8" fontSize={10}>
-                      <Label value="Time" offset={-10} position="insideBottom" style={{ fontSize: '10px', fontWeight: 'bold', fill: '#94a3b8' }} />
+                      <Label value="Time (Iteration Units)" offset={-10} position="insideBottom" style={{ fontSize: '10px', fontWeight: 'bold', fill: '#94a3b8' }} />
                     </XAxis>
                     <YAxis stroke="#94a3b8" fontSize={10}>
-                      <Label value="Megawatts" angle={-90} position="insideLeft" offset={10} style={{ fontSize: '10px', fontWeight: 'bold', fill: '#94a3b8' }} />
+                      <Label value="Energy Convergence" angle={-90} position="insideLeft" offset={10} style={{ fontSize: '10px', fontWeight: 'bold', fill: '#94a3b8' }} />
                     </YAxis>
                     <Tooltip />
                     <Line type="monotone" dataKey="y" stroke="#2563eb" strokeWidth={3} dot={false} />
@@ -374,7 +383,7 @@ const HPCPortal: React.FC<Props> = ({ projectName, inputDocs = [], onClearInput,
                         </button>
                       </form>
                       <p className="text-[9px] text-gray-400 mt-2 text-center font-medium">
-                        Ask about outliers, specific trends, or what these results mean for your project objectives.
+                        Ask about outliers, specific trends, or what these results mean for ${projectName}.
                       </p>
                     </div>
                   )}
