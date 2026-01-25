@@ -125,7 +125,7 @@ const App: React.FC = () => {
               <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-200">
                 <Globe className="text-white" size={18} />
               </div>
-              <span className="text-xl font-black text-gray-900 tracking-tight">NEXUS</span>
+              <span className="text-xl font-black text-gray-900 tracking-tight">COGNEXUS</span>
             </div>
             
             <div className="hidden md:flex flex-1 mx-8 max-w-md">

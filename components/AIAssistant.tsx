@@ -14,7 +14,7 @@ interface Props {
 
 const AIAssistant: React.FC<Props> = ({ projectDescription }) => {
   const [messages, setMessages] = useState<Message[]>([
-    { role: 'model', text: "Hello! I'm your Nexus Research Assistant. How can I help you with your project today? I can suggest simulation parameters, review your objectives, or help brainstorm next steps." }
+    { role: 'model', text: "Hello! I'm your Cognexus Research Assistant. How can I help you with your project today? I can suggest simulation parameters, review your objectives, or help brainstorm next steps." }
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -56,7 +56,7 @@ const AIAssistant: React.FC<Props> = ({ projectDescription }) => {
       }
     } catch (error) {
       console.error(error);
-      setMessages(prev => [...prev, { role: 'model', text: "I encountered an error connecting to the Nexus AI nodes. Please try again in a moment." }]);
+      setMessages(prev => [...prev, { role: 'model', text: "I encountered an error connecting to the Cognexus AI nodes. Please try again in a moment." }]);
     } finally {
       setIsLoading(false);
     }

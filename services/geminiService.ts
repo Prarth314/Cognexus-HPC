@@ -84,7 +84,7 @@ export const analyzeSimulationFollowUp = async (
 
 export const startResearchChat = async (projectContext: string, message: string, history: { role: string, parts: { text: string }[] }[]) => {
   const model = 'gemini-3-flash-preview';
-  const systemInstruction = `You are the Nexus AI Research Assistant. You are currently assisting a research team on a project described as: "${projectContext}". 
+  const systemInstruction = `You are the Cognexus AI Research Assistant. You are currently assisting a research team on a project described as: "${projectContext}". 
   Your goal is to provide high-level scientific insights, suggest simulation parameters, help with documentation, and brainstorm next steps. 
   Be professional, concise, and scientifically accurate.`;
 

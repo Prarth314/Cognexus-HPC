@@ -15,8 +15,8 @@ const UserMenu: React.FC<Props> = ({ userProjects, onLogout, trigger }) => {
 
   // Mock user data state
   const [userInfo, setUserInfo] = useState({
-    name: 'Nexus Researcher',
-    email: 'researcher@nexus-hpc.org',
+    name: 'Cognexus Researcher',
+    email: 'researcher@cognexus.ai',
     bio: 'Lead data scientist specializing in fluid dynamics and predictive atmospheric modeling.',
     role: 'Senior Researcher'
   });
@@ -173,7 +173,7 @@ const UserMenu: React.FC<Props> = ({ userProjects, onLogout, trigger }) => {
                       {[
                         { title: 'Simulation Completed', desc: 'Alert when an HPC job finishes running.' },
                         { title: 'Publication Requests', desc: 'Notify when a team member submits a draft for review.' },
-                        { title: 'Nexus Research News', desc: 'Updates from the global research community.' }
+                        { title: 'Cognexus Research News', desc: 'Updates from the global research community.' }
                       ].map((s, idx) => (
                         <div key={idx} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">
                           <div>
