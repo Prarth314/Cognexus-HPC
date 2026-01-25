@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { Project, Document, TeamMember, AccessLevel, ProjectFile } from '../types';
-import { FileText, BookOpen, Clock, Plus, Search, Terminal, Users, UserMinus, X, Crown, Trash2, Settings2, Shield, Info, CheckCircle, Upload, FileQuestion, FolderOpen, Download, Database, Image as ImageIcon, Eye, Printer, Share2, FileDown, FileSpreadsheet, FileBarChart, CheckSquare, Square } from 'lucide-react';
+import { Project, Document, TeamMember, AccessLevel, ProjectFile, Notification } from '../types';
+import { FileText, BookOpen, Clock, Plus, Search, Terminal, Users, UserMinus, X, Crown, Trash2, Settings2, Shield, Info, CheckCircle, Upload, FileQuestion, FolderOpen, Download, Database, Image as ImageIcon, Eye, Printer, Share2, FileDown, FileSpreadsheet, FileBarChart, CheckSquare, Square, Sparkles } from 'lucide-react';
 import HPCPortal from './HPCPortal';
 import NotificationMenu from './NotificationMenu';
 import UserMenu from './UserMenu';
@@ -11,9 +11,18 @@ interface Props {
   onBack: () => void;
   currentUserId: string;
   onUpdateProject: (p: Project) => void;
+  notifications: Notification[];
+  onUpdateNotifications: (n: Notification[]) => void;
 }
 
-const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onUpdateProject }) => {
+const ProjectWorkspace: React.FC<Props> = ({ 
+  project, 
+  onBack, 
+  currentUserId, 
+  onUpdateProject,
+  notifications,
+  onUpdateNotifications
+}) => {
   const [activeTab, setActiveTab] = useState<'docs' | 'files' | 'hpc'>('docs');
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
@@ -64,7 +73,6 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
     );
   }, [projectFiles, fileSearchTerm]);
 
-  // For this prototype, we allow users to delete and manage regardless of specific owner ID
   const isOwner = true; 
 
   const toggleDocSelection = (id: string) => {
@@ -328,7 +336,10 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
           </div>
           
           <div className="flex items-center space-x-2">
-            <NotificationMenu />
+            <NotificationMenu 
+              notifications={notifications} 
+              onUpdateNotifications={onUpdateNotifications} 
+            />
             <UserMenu 
               userProjects={[]} 
               onLogout={() => window.location.reload()} 
@@ -391,9 +402,6 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
                 className="flex-1 sm:flex-none px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium flex items-center justify-center hover:bg-gray-50 text-black shadow-sm active:scale-95 transition-transform"
               >
                 <Upload size={16} className="mr-2" /> Upload File
-              </button>
-              <button className="flex-1 sm:flex-none px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold flex items-center justify-center hover:bg-blue-700 shadow-md transition-transform active:scale-95">
-                <Plus size={16} className="mr-2" /> New Draft
               </button>
             </div>
           </div>
@@ -805,7 +813,7 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
         </div>
       )}
 
-      {/* EXPLICIT Project Settings Modal */}
+      {/* Project Settings Modal */}
       {isSettingsModalOpen && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200 text-black">

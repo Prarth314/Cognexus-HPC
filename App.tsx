@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo } from 'react';
-import { ALL_PROJECTS, INITIAL_PROJECT_IDS } from './constants';
-import { Project, ProjectType } from './types';
+import { ALL_PROJECTS, INITIAL_PROJECT_IDS, MOCK_NOTIFICATIONS } from './constants';
+import { Project, ProjectType, Notification } from './types';
 import { LayoutGrid, Globe, Plus, Bell, Search, X, Info, FolderSearch } from 'lucide-react';
 import ProjectCard from './components/ProjectCard';
 import ProjectWorkspace from './components/ProjectWorkspace';
@@ -15,6 +15,9 @@ const App: React.FC = () => {
   const [userProjectIds, setUserProjectIds] = useState<string[]>(INITIAL_PROJECT_IDS);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [projectSearchTerm, setProjectSearchTerm] = useState('');
+  
+  // Persistent Notifications State
+  const [notifications, setNotifications] = useState<Notification[]>(MOCK_NOTIFICATIONS);
   
   // Modals
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
@@ -111,6 +114,8 @@ const App: React.FC = () => {
         onBack={() => setSelectedProjectId(null)} 
         currentUserId={CURRENT_USER_ID}
         onUpdateProject={handleUpdateProject}
+        notifications={notifications}
+        onUpdateNotifications={setNotifications}
       />
     );
   }
@@ -150,7 +155,10 @@ const App: React.FC = () => {
             </div>
 
             <div className="flex items-center space-x-4">
-              <NotificationMenu />
+              <NotificationMenu 
+                notifications={notifications} 
+                onUpdateNotifications={setNotifications} 
+              />
               <UserMenu 
                 userProjects={userProjects} 
                 onLogout={() => window.location.reload()} 

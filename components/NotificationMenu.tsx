@@ -1,68 +1,30 @@
 
 import React, { useState, useMemo } from 'react';
-import { Bell, FileEdit, UserCog, UserPlus, CheckCircle2, X, Clock, Trash2, CheckSquare } from 'lucide-react';
+import { Bell, FileEdit, UserCog, UserPlus, CheckCircle2, Clock, Trash2, CheckSquare } from 'lucide-react';
 import { Notification } from '../types';
 
-const MOCK_NOTIFICATIONS: Notification[] = [
-  {
-    id: 'n1',
-    type: 'Edit',
-    title: 'Document Updated',
-    description: 'Sarah Jenkins edited "Fluid Dynamics Peer Review" v2.',
-    projectName: 'Wildfire Dynamics Model',
-    timestamp: '15 mins ago',
-    isRead: false,
-    author: 'Sarah Jenkins'
-  },
-  {
-    id: 'n2',
-    type: 'RoleChange',
-    title: 'Access Level Updated',
-    description: 'Dr. Aris Thorne promoted you to Owner.',
-    projectName: 'Quantum Topology Research',
-    timestamp: '2 hours ago',
-    isRead: false,
-    author: 'Dr. Aris Thorne'
-  },
-  {
-    id: 'n3',
-    type: 'NewMember',
-    title: 'New Collaborator',
-    description: 'Alex Rivera joined the project team.',
-    projectName: 'NextGen EV Aerodynamics',
-    timestamp: 'Yesterday',
-    isRead: true,
-    author: 'Alex Rivera'
-  },
-  {
-    id: 'n4',
-    type: 'StatusUpdate',
-    title: 'Simulation Complete',
-    description: 'Job HPC-9421 finished successfully on Aurora-1.',
-    projectName: 'Wildfire Dynamics Model',
-    timestamp: '3 days ago',
-    isRead: true
-  }
-];
+interface Props {
+  notifications: Notification[];
+  onUpdateNotifications: (notifications: Notification[]) => void;
+}
 
-const NotificationMenu: React.FC = () => {
+const NotificationMenu: React.FC<Props> = ({ notifications, onUpdateNotifications }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [notifications, setNotifications] = useState<Notification[]>(MOCK_NOTIFICATIONS);
 
   const unreadCount = useMemo(() => notifications.filter(n => !n.isRead).length, [notifications]);
 
   const markAllAsRead = () => {
-    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+    onUpdateNotifications(notifications.map(n => ({ ...n, isRead: true })));
   };
 
   const deleteNotification = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    setNotifications(prev => prev.filter(n => n.id !== id));
+    onUpdateNotifications(notifications.filter(n => n.id !== id));
   };
 
   const toggleRead = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: !n.isRead } : n));
+    onUpdateNotifications(notifications.map(n => n.id === id ? { ...n, isRead: !n.isRead } : n));
   };
 
   const getIcon = (type: Notification['type']) => {

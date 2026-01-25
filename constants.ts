@@ -1,10 +1,52 @@
 
-import { Project, HPCCluster, TeamMember, Document, ProjectFile } from './types';
+import { Project, HPCCluster, TeamMember, Document, ProjectFile, Notification } from './types';
 
 const MOCK_TEAM: TeamMember[] = [
   { id: 'm1', name: 'Dr. Aris Thorne', role: 'Lead Researcher', accessLevel: 'Collaborator' },
   { id: 'm2', name: 'Sarah Jenkins', role: 'Data Scientist', accessLevel: 'Collaborator' },
   { id: 'm3', name: 'Alex Rivera', role: 'HPC Engineer', accessLevel: 'Collaborator' }
+];
+
+export const MOCK_NOTIFICATIONS: Notification[] = [
+  {
+    id: 'n1',
+    type: 'Edit',
+    title: 'Document Updated',
+    description: 'Sarah Jenkins edited "Fluid Dynamics Peer Review" v2.',
+    projectName: 'Wildfire Dynamics Model',
+    timestamp: '15 mins ago',
+    isRead: false,
+    author: 'Sarah Jenkins'
+  },
+  {
+    id: 'n2',
+    type: 'RoleChange',
+    title: 'Access Level Updated',
+    description: 'Dr. Aris Thorne promoted you to Owner.',
+    projectName: 'Quantum Topology Research',
+    timestamp: '2 hours ago',
+    isRead: false,
+    author: 'Dr. Aris Thorne'
+  },
+  {
+    id: 'n3',
+    type: 'NewMember',
+    title: 'New Collaborator',
+    description: 'Alex Rivera joined the project team.',
+    projectName: 'NextGen EV Aerodynamics',
+    timestamp: 'Yesterday',
+    isRead: true,
+    author: 'Alex Rivera'
+  },
+  {
+    id: 'n4',
+    type: 'StatusUpdate',
+    title: 'Simulation Complete',
+    description: 'Job HPC-9421 finished successfully on Aurora-1.',
+    projectName: 'Wildfire Dynamics Model',
+    timestamp: '3 days ago',
+    isRead: true
+  }
 ];
 
 export const ALL_PROJECTS: Project[] = [
