@@ -2,10 +2,11 @@
 import React, { useState, useMemo } from 'react';
 import { ALL_PROJECTS, INITIAL_PROJECT_IDS } from './constants';
 import { Project, ProjectType } from './types';
-import { LayoutGrid, Globe, Plus, LogOut, Bell, Search, Settings, X, ShieldAlert, CheckCircle, Briefcase, Info } from 'lucide-react';
+import { LayoutGrid, Globe, Plus, LogOut, Bell, Search, Settings, X, ShieldAlert, CheckCircle, Briefcase, Info, FolderSearch } from 'lucide-react';
 import ProjectCard from './components/ProjectCard';
 import ProjectWorkspace from './components/ProjectWorkspace';
 import UserMenu from './components/UserMenu';
+import NotificationMenu from './components/NotificationMenu';
 
 const CURRENT_USER_ID = 'me';
 
@@ -13,6 +14,7 @@ const App: React.FC = () => {
   const [projects, setProjects] = useState<Project[]>(ALL_PROJECTS);
   const [userProjectIds, setUserProjectIds] = useState<string[]>(INITIAL_PROJECT_IDS);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [projectSearchTerm, setProjectSearchTerm] = useState('');
   
   // Modals
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
@@ -28,7 +30,16 @@ const App: React.FC = () => {
   const [joinInput, setJoinInput] = useState('');
   const [joinStatus, setJoinStatus] = useState<'idle' | 'error' | 'success'>('idle');
 
-  const userProjects = useMemo(() => projects.filter(p => userProjectIds.includes(p.id)), [projects, userProjectIds]);
+  const userProjects = useMemo(() => {
+    return projects
+      .filter(p => userProjectIds.includes(p.id))
+      .filter(p => 
+        p.name.toLowerCase().includes(projectSearchTerm.toLowerCase()) ||
+        p.organization.toLowerCase().includes(projectSearchTerm.toLowerCase()) ||
+        p.description.toLowerCase().includes(projectSearchTerm.toLowerCase())
+      );
+  }, [projects, userProjectIds, projectSearchTerm]);
+
   const selectedProject = useMemo(() => projects.find(p => p.id === selectedProjectId), [projects, selectedProjectId]);
 
   const handleSelect = (id: string) => {
@@ -130,16 +141,24 @@ const App: React.FC = () => {
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
                 <input 
                   type="text" 
+                  value={projectSearchTerm}
+                  onChange={(e) => setProjectSearchTerm(e.target.value)}
                   placeholder="Search projects..." 
-                  className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-transparent rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white focus:outline-none transition-all"
+                  className="w-full pl-10 pr-10 py-2 bg-gray-50 border border-transparent rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:bg-white focus:outline-none transition-all text-black font-medium"
                 />
+                {projectSearchTerm && (
+                  <button 
+                    onClick={() => setProjectSearchTerm('')}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
               </div>
             </div>
 
             <div className="flex items-center space-x-4">
-              <button className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors">
-                <Bell size={20} />
-              </button>
+              <NotificationMenu />
               
               <UserMenu 
                 userProjects={userProjects}
@@ -178,33 +197,53 @@ const App: React.FC = () => {
         <div className="flex items-center justify-between mb-8">
           <h2 className="text-xl font-bold text-gray-900 flex items-center">
             <LayoutGrid className="mr-2 text-blue-600" size={20} />
-            My Active Projects
+            {projectSearchTerm ? `Search Results for "${projectSearchTerm}"` : 'My Active Projects'}
           </h2>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {userProjects.map(project => (
-            <ProjectCard 
-              key={project.id} 
-              project={project} 
-              onSelect={handleSelect} 
-            />
-          ))}
-          
-          <button 
-            onClick={() => {
-              setJoinStatus('idle');
-              setJoinInput('');
-              setIsJoinModalOpen(true);
-            }}
-            className="border-2 border-dashed border-gray-200 rounded-xl p-8 flex flex-col items-center justify-center group hover:border-blue-400 hover:bg-blue-50/30 transition-all text-black bg-white"
-          >
-            <div className="p-4 bg-gray-50 rounded-full text-gray-400 group-hover:text-blue-500 transition-colors mb-4">
-              <Plus size={24} />
+        {userProjects.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {userProjects.map(project => (
+              <ProjectCard 
+                key={project.id} 
+                project={project} 
+                onSelect={handleSelect} 
+              />
+            ))}
+            
+            {!projectSearchTerm && (
+              <button 
+                onClick={() => {
+                  setJoinStatus('idle');
+                  setJoinInput('');
+                  setIsJoinModalOpen(true);
+                }}
+                className="border-2 border-dashed border-gray-200 rounded-xl p-8 flex flex-col items-center justify-center group hover:border-blue-400 hover:bg-blue-50/30 transition-all text-black bg-white"
+              >
+                <div className="p-4 bg-gray-50 rounded-full text-gray-400 group-hover:text-blue-500 transition-colors mb-4">
+                  <Plus size={24} />
+                </div>
+                <span className="text-sm font-bold group-hover:text-blue-600">Join Existing Project</span>
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center justify-center py-20 px-6 text-center bg-white border border-dashed border-gray-200 rounded-3xl">
+            <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-300 mb-4">
+              <FolderSearch size={32} />
             </div>
-            <span className="text-sm font-bold group-hover:text-blue-600">Join Existing Project</span>
-          </button>
-        </div>
+            <h3 className="text-lg font-bold text-gray-900">No matching projects</h3>
+            <p className="text-sm text-gray-500 max-w-xs mx-auto mt-2">
+              We couldn't find any of your active projects matching "{projectSearchTerm}".
+            </p>
+            <button 
+              onClick={() => setProjectSearchTerm('')}
+              className="mt-6 px-4 py-2 text-sm font-bold text-blue-600 hover:text-blue-800"
+            >
+              Clear search filter
+            </button>
+          </div>
+        )}
       </main>
 
       {/* Join Project Modal */}

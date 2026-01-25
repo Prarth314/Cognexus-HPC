@@ -1,18 +1,19 @@
 
 import React, { useState, useEffect } from 'react';
 import { HPC_CLUSTERS } from '../constants';
-import { HPCCluster, SimulationResult, Document } from '../types';
-import { MapPin, Cpu, Play, Activity, CheckCircle2, Loader2, Sparkles, FileText, X } from 'lucide-react';
+import { HPCCluster, SimulationResult, Document, ProjectFile } from '../types';
+import { MapPin, Cpu, Play, Activity, CheckCircle2, Loader2, Sparkles, FileText, X, Zap, DollarSign, Download } from 'lucide-react';
 import { summarizeSimulation } from '../services/geminiService';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Label } from 'recharts';
 
 interface Props {
   projectName: string;
   inputDocs?: Document[];
   onClearInput?: () => void;
+  onSimulationComplete?: (file: ProjectFile) => void;
 }
 
-const HPCPortal: React.FC<Props> = ({ projectName, inputDocs = [], onClearInput }) => {
+const HPCPortal: React.FC<Props> = ({ projectName, inputDocs = [], onClearInput, onSimulationComplete }) => {
   const [selectedCluster, setSelectedCluster] = useState<HPCCluster | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -79,15 +80,43 @@ const HPCPortal: React.FC<Props> = ({ projectName, inputDocs = [], onClearInput 
 [EXIT] Exporting result set to Nexus S3.
     `.trim();
 
-    setResult({
+    // Generate mock performance metrics
+    const gpuPerf = "NVIDIA A100 @ 312 TFLOPS (Peak 87%)";
+    const estimatedCost = `$${(Math.random() * 15 + 2.50).toFixed(2)}`;
+
+    const simulationResult: SimulationResult = {
       jobId: `SIM-${Math.floor(Math.random()*9999)}`,
       timestamp: new Date().toLocaleTimeString(),
       logs: mockLogs,
-      dataPoints: mockData
-    });
+      dataPoints: mockData,
+      gpuPerformance: gpuPerf,
+      cost: estimatedCost
+    };
+
+    setResult(simulationResult);
+
+    // Create a generated file for the project's File tab
+    let generatedFileName = '';
+    if (onSimulationComplete) {
+      generatedFileName = `Result_${simulationResult.jobId}_Data_Analysis.xlsx`;
+      const generatedFile: ProjectFile = {
+        id: `f-sim-${Date.now()}`,
+        name: `Result_${simulationResult.jobId}_Data_Analysis`,
+        extension: 'xlsx',
+        size: '2.4 MB',
+        source: 'Simulation',
+        timestamp: 'Just now',
+        category: 'Result'
+      };
+      onSimulationComplete(generatedFile);
+    }
 
     setIsSummarizing(true);
-    const summaryContext = `${projectName}${inputDocs.length > 0 ? ` (Integrated with files: ${inputDocs.map(d => d.title).join(', ')})` : ''}`;
+    // Include information about the generated files in the context sent to Gemini
+    const summaryContext = `${projectName} (HPC Cluster: ${selectedCluster?.name}). 
+    Output Files Generated: ${generatedFileName}. 
+    Input Files Used: ${inputDocs.length > 0 ? inputDocs.map(d => d.title).join(', ') : 'None'}.`;
+    
     const summary = await summarizeSimulation(mockLogs, summaryContext);
     setResult(prev => prev ? { ...prev, summary } : null);
     setIsSummarizing(false);
@@ -210,45 +239,110 @@ const HPCPortal: React.FC<Props> = ({ projectName, inputDocs = [], onClearInput 
                   <CheckCircle2 className="text-green-500 mr-2" size={20} />
                   Job Results: {result.jobId}
                 </h3>
-                <span className="text-xs text-gray-400 font-medium uppercase tracking-wider">{result.timestamp}</span>
+                <div className="flex items-center space-x-3">
+                   <span className="text-xs text-gray-400 font-medium uppercase tracking-wider">{result.timestamp}</span>
+                   <div className="px-2 py-1 bg-blue-50 text-blue-600 text-[10px] font-bold rounded border border-blue-100 flex items-center">
+                     <Download size={10} className="mr-1" /> EXPORTED TO FILES
+                   </div>
+                </div>
               </div>
               
-              <div className="h-[250px] w-full mb-6 text-black">
+              {/* Performance Metrics Bar */}
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl flex items-center">
+                  <div className="p-2 bg-blue-600 text-white rounded-lg mr-3">
+                    <Zap size={18} />
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-0.5">Compute Resource</div>
+                    <div className="text-sm font-bold text-gray-900">{result.gpuPerformance}</div>
+                  </div>
+                </div>
+                <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl flex items-center">
+                  <div className="p-2 bg-emerald-600 text-white rounded-lg mr-3">
+                    <DollarSign size={18} />
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-0.5">Job Usage Cost</div>
+                    <div className="text-sm font-bold text-gray-900">{result.cost} <span className="text-[10px] text-gray-400 font-normal">(Auto-billed)</span></div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="h-[300px] w-full mb-6 text-black">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={result.dataPoints}>
+                  <LineChart data={result.dataPoints} margin={{ top: 10, right: 30, left: 20, bottom: 40 }}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="x" hide />
-                    <YAxis stroke="#94a3b8" fontSize={12} />
+                    <XAxis 
+                      dataKey="x" 
+                      stroke="#94a3b8" 
+                      fontSize={10} 
+                      tickLine={false}
+                      axisLine={false}
+                    >
+                      <Label 
+                        value="Time (Cycles)" 
+                        offset={-25} 
+                        position="insideBottom" 
+                        style={{ fontSize: '10px', fontWeight: 'bold', fill: '#94a3b8', textTransform: 'uppercase' }} 
+                      />
+                    </XAxis>
+                    <YAxis 
+                      stroke="#94a3b8" 
+                      fontSize={10} 
+                      tickLine={false}
+                      axisLine={false}
+                    >
+                      <Label 
+                        value="Megawatts" 
+                        angle={-90} 
+                        position="insideLeft" 
+                        offset={15}
+                        style={{ fontSize: '10px', fontWeight: 'bold', fill: '#94a3b8', textTransform: 'uppercase', textAnchor: 'middle' }} 
+                      />
+                    </YAxis>
                     <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', color: 'black' }} />
                     <Line type="monotone" dataKey="y" stroke="#2563eb" strokeWidth={3} dot={false} animationDuration={1000} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-gray-900 rounded-xl p-4 overflow-hidden">
-                  <div className="text-[10px] text-gray-500 font-mono mb-2 uppercase tracking-widest">System Logs</div>
-                  <pre className="text-green-400 font-mono text-[10px] overflow-y-auto max-h-[150px] custom-scrollbar leading-tight">
-                    {result.logs}
-                  </pre>
-                </div>
-                <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-4 flex flex-col">
-                  <div className="flex items-center text-blue-700 font-bold text-sm mb-3">
-                    <Sparkles size={16} className="mr-1.5" />
-                    AI Contextual Analysis
+              <div className="grid grid-cols-1 gap-6">
+                <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-6 flex flex-col shadow-sm">
+                  <div className="flex items-center text-blue-700 font-bold text-base mb-4">
+                    <Sparkles size={18} className="mr-2" />
+                    Professional Data Interpretation
                   </div>
                   {isSummarizing ? (
-                    <div className="flex-1 flex items-center justify-center">
+                    <div className="flex-1 flex items-center justify-center py-8">
                       <div className="flex flex-col items-center">
-                        <Loader2 className="animate-spin text-blue-400 mb-2" />
-                        <span className="text-[10px] text-blue-400 font-bold uppercase tracking-widest">Analyzing staged files...</span>
+                        <Loader2 className="animate-spin text-blue-400 mb-2" size={32} />
+                        <span className="text-xs text-blue-400 font-bold uppercase tracking-widest">Synthesizing statistical results...</span>
                       </div>
                     </div>
                   ) : (
-                    <p className="text-sm text-black leading-relaxed italic">
-                      {result.summary}
-                    </p>
+                    <div className="prose prose-sm max-w-none text-black leading-relaxed">
+                      {result.summary?.split('\n').map((line, idx) => {
+                        if (line.startsWith('- ')) {
+                          return <li key={idx} className="ml-4 mb-1">{line.substring(2)}</li>;
+                        }
+                        if (line.match(/^[A-Z][^a-z]+:$/) || line.includes('###') || line.includes('Interpretation') || line.includes('Takeaway')) {
+                          return <h4 key={idx} className="font-bold text-gray-900 mt-4 mb-2 uppercase text-xs tracking-wider">{line.replace(/###/g, '')}</h4>;
+                        }
+                        return <p key={idx} className="mb-2 whitespace-pre-wrap">{line}</p>;
+                      })}
+                    </div>
                   )}
+                </div>
+
+                <div className="bg-gray-900 rounded-xl p-4 overflow-hidden border border-gray-800">
+                  <div className="text-[10px] text-gray-500 font-mono mb-2 uppercase tracking-widest flex justify-between">
+                    <span>HPC Execution Logs</span>
+                    <span className="text-green-500/50">RAW_OUTPUT</span>
+                  </div>
+                  <pre className="text-green-400 font-mono text-[10px] overflow-y-auto max-h-[150px] custom-scrollbar leading-tight">
+                    {result.logs}
+                  </pre>
                 </div>
               </div>
             </div>

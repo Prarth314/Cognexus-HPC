@@ -1,6 +1,7 @@
 
 export type ProjectType = 'University' | 'Government' | 'Private';
 export type AccessLevel = 'Owner' | 'Collaborator';
+export type NotificationType = 'Edit' | 'RoleChange' | 'StatusUpdate' | 'NewMember';
 
 export interface TeamMember {
   id: string;
@@ -29,6 +30,18 @@ export interface Document {
   type: 'Draft' | 'Publication' | 'Review';
   status: 'Pending' | 'Approved' | 'In Review';
   updatedAt: string;
+  content?: string;
+}
+
+export interface ProjectFile {
+  id: string;
+  name: string;
+  extension: string;
+  size: string;
+  source: 'User' | 'Simulation' | 'System';
+  timestamp: string;
+  category: 'Data' | 'Result' | 'Mesh' | 'Report';
+  content?: string;
 }
 
 export interface HPCCluster {
@@ -47,4 +60,17 @@ export interface SimulationResult {
   logs: string;
   dataPoints: { x: number; y: number }[];
   summary?: string;
+  gpuPerformance?: string;
+  cost?: string;
+}
+
+export interface Notification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  description: string;
+  projectName: string;
+  timestamp: string;
+  isRead: boolean;
+  author?: string;
 }

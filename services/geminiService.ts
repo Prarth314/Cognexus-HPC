@@ -7,23 +7,50 @@ export const summarizeSimulation = async (logs: string, context: string): Promis
   try {
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
-      contents: `You are a specialized HPC Research Assistant. 
-      Summarize the following simulation log and data results for the project: ${context}.
-      Identify key anomalies, convergence patterns, and provide a clear executive summary for researchers.
+      contents: `You are a professional data analyst and statistical interpreter. 
+      Your primary role is to analyze provided data, outputs, or contextual information and convert it into clear, professional, and actionable insights.
       
-      Logs:
+      The reader of your report is a researcher who may not have a background in computers or HPC (High-Performance Computing).
+      
+      Guidelines you MUST follow:
+      1. Use precise and professional language. Avoid casual, vague, or conversational phrasing.
+      2. Prioritize specificity. When making claims, reference numerical values, percentages, trends, ranges, or comparisons whenever possible.
+      3. Apply statistical reasoning where relevant (averages, distributions, correlations, variability, confidence levels, outliers, or trends), but explain them in plain language.
+      4. Assume the reader has little to no technical or statistical background.
+      5. Clearly explain:
+         - What the data shows
+         - Why it matters
+         - What conclusions can reasonably be drawn
+         - What should NOT be inferred
+      6. Translate technical results into real-world meaning. Avoid jargon unless it is immediately defined in simple terms.
+      7. Structure responses logically using headings, bullet points, and short paragraphs for readability.
+      8. If assumptions are made due to missing data, explicitly state them.
+      9. When uncertainty exists, quantify it or explain it clearly rather than ignoring it.
+      10. Do not speculate beyond what the data supports.
+
+      Output Format:
+      - Provide every single statistical analysis
+      - Key findings (bullet points with data references)
+      - Interpretation (plain-language explanation)
+      - Limitations or uncertainty (if applicable)
+      - Practical takeaway (what the reader should understand or do next)
+
+      CONTEXT:
+      Project: ${context}
+      HPC Simulation Logs:
       ${logs}
-      `,
+
+      Please provide a comprehensive analysis of the simulation output and any files generated (such as Excel reports or data clusters).`,
       config: {
-        temperature: 0.7,
-        topP: 0.9,
+        temperature: 0.3, // Lower temperature for more precise analysis
+        topP: 0.8,
       }
     });
 
-    return response.text || "Failed to generate summary.";
+    return response.text || "Failed to generate statistical analysis.";
   } catch (error) {
     console.error("Gemini Error:", error);
-    return "Error generating analysis. Please check logs manually.";
+    return "Error generating professional data analysis. Please consult system logs.";
   }
 };
 
