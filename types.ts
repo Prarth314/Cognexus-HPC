@@ -30,7 +30,6 @@ export interface Document {
   type: 'Draft' | 'Publication' | 'Review';
   status: 'Pending' | 'Approved' | 'In Review';
   updatedAt: string;
-  content?: string;
 }
 
 export interface ProjectFile {
@@ -41,7 +40,6 @@ export interface ProjectFile {
   source: 'User' | 'Simulation' | 'System';
   timestamp: string;
   category: 'Data' | 'Result' | 'Mesh' | 'Report';
-  content?: string;
 }
 
 export interface HPCCluster {

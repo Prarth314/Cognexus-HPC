@@ -2,11 +2,11 @@
 import React, { useState, useMemo } from 'react';
 import { ALL_PROJECTS, INITIAL_PROJECT_IDS } from './constants';
 import { Project, ProjectType } from './types';
-import { LayoutGrid, Globe, Plus, LogOut, Bell, Search, Settings, X, ShieldAlert, CheckCircle, Briefcase, Info, FolderSearch } from 'lucide-react';
+import { LayoutGrid, Globe, Plus, Bell, Search, X, Info, FolderSearch } from 'lucide-react';
 import ProjectCard from './components/ProjectCard';
 import ProjectWorkspace from './components/ProjectWorkspace';
-import UserMenu from './components/UserMenu';
 import NotificationMenu from './components/NotificationMenu';
+import UserMenu from './components/UserMenu';
 
 const CURRENT_USER_ID = 'me';
 
@@ -48,12 +48,6 @@ const App: React.FC = () => {
 
   const handleUpdateProject = (updated: Project) => {
     setProjects(prev => prev.map(p => p.id === updated.id ? updated : p));
-  };
-
-  const handleLogout = () => {
-    if (confirm('Are you sure you want to log out of the Nexus research network?')) {
-      window.location.reload();
-    }
   };
 
   const handleCreateProject = (e: React.FormEvent) => {
@@ -117,8 +111,6 @@ const App: React.FC = () => {
         onBack={() => setSelectedProjectId(null)} 
         currentUserId={CURRENT_USER_ID}
         onUpdateProject={handleUpdateProject}
-        userProjects={userProjects}
-        onLogout={handleLogout}
       />
     );
   }
@@ -159,15 +151,14 @@ const App: React.FC = () => {
 
             <div className="flex items-center space-x-4">
               <NotificationMenu />
-              
               <UserMenu 
-                userProjects={userProjects}
-                onLogout={handleLogout}
+                userProjects={userProjects} 
+                onLogout={() => window.location.reload()} 
                 trigger={
-                  <div className="h-8 w-8 bg-blue-100 border border-blue-200 rounded-full flex items-center justify-center text-blue-600 font-bold text-xs hover:bg-blue-200 transition-colors cursor-pointer">
+                  <div className="h-8 w-8 bg-blue-100 border border-blue-200 rounded-full flex items-center justify-center text-blue-600 font-bold text-xs hover:ring-2 hover:ring-blue-500 transition-all">
                     ME
                   </div>
-                }
+                } 
               />
             </div>
           </div>

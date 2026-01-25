@@ -1,56 +1,47 @@
 
 import React, { useState, useMemo, useRef } from 'react';
 import { Project, Document, TeamMember, AccessLevel, ProjectFile } from '../types';
-import { FileText, Send, BookOpen, Clock, Plus, Search, Terminal, Users, UserMinus, ShieldCheck, X, Crown, MoreVertical, Trash2, Settings2, Shield, Info, MessageSquare, CheckCircle, Upload, CheckSquare, Square, Play, FileQuestion, FolderOpen, Download, HardDrive, Filter, FileSpreadsheet, FileBarChart, Sparkles, Eye, FileCode, ExternalLink, Printer } from 'lucide-react';
+import { FileText, BookOpen, Clock, Plus, Search, Terminal, Users, UserMinus, X, Crown, Trash2, Settings2, Shield, Info, CheckCircle, Upload, FileQuestion, FolderOpen, Download, Database, Image as ImageIcon, Eye, Printer, Share2, FileDown, FileSpreadsheet, FileBarChart, CheckSquare, Square } from 'lucide-react';
 import HPCPortal from './HPCPortal';
-import AIAssistant from './AIAssistant';
-import UserMenu from './UserMenu';
 import NotificationMenu from './NotificationMenu';
+import UserMenu from './UserMenu';
 
 interface Props {
   project: Project;
   onBack: () => void;
   currentUserId: string;
   onUpdateProject: (p: Project) => void;
-  userProjects: Project[];
-  onLogout: () => void;
 }
 
-const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onUpdateProject, userProjects, onLogout }) => {
-  const [activeTab, setActiveTab] = useState<'docs' | 'files' | 'hpc' | 'ai'>('docs');
+const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onUpdateProject }) => {
+  const [activeTab, setActiveTab] = useState<'docs' | 'files' | 'hpc'>('docs');
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
-  const [isNewDraftModalOpen, setIsNewDraftModalOpen] = useState(false);
-  
-  // Preview States
-  const [viewingDoc, setViewingDoc] = useState<Document | null>(null);
-  const [viewingFile, setViewingFile] = useState<ProjectFile | null>(null);
+  const [previewDoc, setPreviewDoc] = useState<Document | null>(null);
+  const [previewFile, setPreviewFile] = useState<ProjectFile | null>(null);
   
   // Search State
   const [docSearchTerm, setDocSearchTerm] = useState('');
   const [fileSearchTerm, setFileSearchTerm] = useState('');
   
-  // New Draft State
-  const [newDraftTitle, setNewDraftTitle] = useState('');
-  
   // File Upload Ref
   const fileInputRef = useRef<HTMLInputElement>(null);
-  
+
   // Selection State
   const [selectedDocIds, setSelectedDocIds] = useState<string[]>([]);
   const [stagedDocsForHPC, setStagedDocsForHPC] = useState<Document[]>([]);
   
   // Documents & Files state
   const [documents, setDocuments] = useState<Document[]>([
-    { id: 'd1', title: 'Preliminary Data Analysis v1', author: 'Me', type: 'Draft', status: 'Pending', updatedAt: '2 hours ago', content: "This preliminary report outlines the initial findings from the Q3 sensor deployments. Initial data indicates a 15% variance in thermal readings across the northern quadrant. We recommend further validation using the Aurora-1 cluster to refine the mesh density in high-gradient areas.\n\n### Methodology\nWe utilized standard piezoelectric sensors calibrated to within 0.01% error. Data was logged every 5ms for a duration of 48 hours." },
-    { id: 'd2', title: 'Q1 Forest Fire Report', author: 'Jane Doe', type: 'Publication', status: 'In Review', updatedAt: 'Yesterday', content: "EXECUTIVE SUMMARY: The Q1 reporting period saw a significant increase in dry-brush accumulation. Combined with lower-than-average precipitation, the predictive model suggests a high-risk scenario for the upcoming dry season.\n\n### Key Risks\n1. Low moisture content in vegetation\n2. Shift in seasonal wind patterns\n3. Limited accessibility for ground crews in Section B." },
-    { id: 'd3', title: 'Fluid Dynamics Peer Review', author: 'Dr. Smith', type: 'Review', status: 'Approved', updatedAt: '3 days ago', content: "REVIEWER COMMENTS: The application of the new lattice Boltzmann method is well-justified. However, the turbulence model used in the boundary layers requires additional documentation. \n\n### Verdict\nApproved with minor revisions requested for Appendix B." },
-    { id: 'd4', title: 'Meteorological Dataset 2024', author: 'Admin', type: 'Draft', status: 'Approved', updatedAt: '5 days ago', content: "CSV HEADER: timestamp, temperature, humidity, wind_speed, wind_direction, solar_radiation\n2024-01-01T00:00Z, 12.4, 82, 14.2, 280, 0\n2024-01-01T01:00Z, 11.9, 85, 12.1, 275, 0\n..." }
+    { id: 'd1', title: 'Preliminary Data Analysis v1', author: 'Me', type: 'Draft', status: 'Pending', updatedAt: '2 hours ago' },
+    { id: 'd2', title: 'Q1 Forest Fire Report', author: 'Jane Doe', type: 'Publication', status: 'In Review', updatedAt: 'Yesterday' },
+    { id: 'd3', title: 'Fluid Dynamics Peer Review', author: 'Dr. Smith', type: 'Review', status: 'Approved', updatedAt: '3 days ago' },
+    { id: 'd4', title: 'Meteorological Dataset 2024', author: 'Admin', type: 'Draft', status: 'Approved', updatedAt: '5 days ago' }
   ]);
 
   const [projectFiles, setProjectFiles] = useState<ProjectFile[]>([
-    { id: 'f1', name: 'raw_sensor_data_2024', extension: 'csv', size: '124 MB', source: 'User', timestamp: '2 days ago', category: 'Data', content: "timestamp,sensor_id,val\n1704067200,S-104,42.12\n1704067201,S-104,42.15\n1704067202,S-104,42.11" },
-    { id: 'f2', name: 'mesh_v1_topology', extension: 'json', size: '12 MB', source: 'System', timestamp: '1 week ago', category: 'Mesh', content: '{"nodes": 4096, "edges": 12288, "topology": "hex-grid", "version": "1.0.2"}' },
+    { id: 'f1', name: 'raw_sensor_data_2024', extension: 'csv', size: '124 MB', source: 'User', timestamp: '2 days ago', category: 'Data' },
+    { id: 'f2', name: 'mesh_v1_topology', extension: 'json', size: '12 MB', source: 'System', timestamp: '1 week ago', category: 'Mesh' },
     { id: 'f3', name: 'aerodynamics_convergence_plot', extension: 'png', size: '1.2 MB', source: 'Simulation', timestamp: '3 days ago', category: 'Result' },
     { id: 'f4', name: 'q1_financial_impact', extension: 'xlsx', size: '4.5 MB', source: 'User', timestamp: '5 days ago', category: 'Report' }
   ]);
@@ -159,19 +150,6 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
     }
   };
 
-  const handleDownloadFile = (file: ProjectFile) => {
-    const content = file.content || `Binary data placeholder for ${file.name}.${file.extension}`;
-    const blob = new Blob([content], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${file.name}.${file.extension}`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
-
   const handleApproveDocument = (docId: string) => {
     if (!isOwner) return;
     setDocuments(prev => prev.map(d => d.id === docId ? { ...d, status: 'Approved' } : d));
@@ -185,21 +163,18 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Logic: Decide if it's a Document or a File based on context or simple extension
     const isDocLike = ['pdf', 'docx', 'doc', 'txt'].includes(file.name.split('.').pop()?.toLowerCase() || '');
 
-    if (activeTab === 'docs' || isDocLike) {
+    if (activeTab === 'docs' && isDocLike) {
       const newDoc: Document = {
         id: `d-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
         title: file.name,
         author: 'Me',
         type: 'Draft',
         status: 'Pending',
-        updatedAt: 'Just now',
-        content: `Uploaded document preview: ${file.name}. Size: ${(file.size / 1024).toFixed(2)} KB.`
+        updatedAt: 'Just now'
       };
       setDocuments(prev => [newDoc, ...prev]);
-      if (activeTab !== 'docs') setActiveTab('docs');
     } else {
       const extension = file.name.split('.').pop() || 'bin';
       const newFile: ProjectFile = {
@@ -209,33 +184,13 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
         size: `${(file.size / (1024 * 1024)).toFixed(2)} MB`,
         source: 'User',
         timestamp: 'Just now',
-        category: 'Data',
-        content: `Technical data preview for binary asset: ${file.name}. Extension: ${extension}.`
+        category: 'Data'
       };
       setProjectFiles(prev => [newFile, ...prev]);
       if (activeTab !== 'files') setActiveTab('files');
     }
     
     if (e.target) e.target.value = '';
-  };
-
-  const handleCreateDraft = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newDraftTitle.trim()) return;
-    
-    const newDoc: Document = {
-      id: `d-${Date.now()}`,
-      title: newDraftTitle,
-      author: 'Me',
-      type: 'Draft',
-      status: 'Pending',
-      updatedAt: 'Just now',
-      content: `### ${newDraftTitle}\n\nThis is a newly created draft. Use the AI Assistant or manual input to populate this section with research findings.`
-    };
-    
-    setDocuments(prev => [newDoc, ...prev]);
-    setIsNewDraftModalOpen(false);
-    setNewDraftTitle('');
   };
 
   const getFileIcon = (ext: string) => {
@@ -245,6 +200,90 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
       case 'png': case 'jpg': case 'jpeg': return <FileBarChart className="text-purple-600" size={18} />;
       default: return <FileText className="text-blue-600" size={18} />;
     }
+  };
+
+  const renderFilePreviewContent = (file: ProjectFile) => {
+    const ext = file.extension.toLowerCase();
+    
+    if (ext === 'csv' || ext === 'xlsx') {
+      return (
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <table className="min-w-full divide-y divide-gray-100 text-black">
+            <thead className="bg-gray-50">
+              <tr>
+                {['ID', 'Timestamp', 'Parameter_A', 'Parameter_B', 'Convergence'].map(h => (
+                  <th key={h} className="px-4 py-2 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {[1, 2, 3, 4, 5, 6, 7, 8].map(i => (
+                <tr key={i} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-4 py-2 text-xs text-gray-600 font-mono">#{1000 + i}</td>
+                  <td className="px-4 py-2 text-xs text-gray-500">2024-05-{10+i} 14:00:0{i}</td>
+                  <td className="px-4 py-2 text-xs text-blue-600 font-bold">{(Math.random() * 10).toFixed(4)}</td>
+                  <td className="px-4 py-2 text-xs text-gray-600">{(Math.random() * 100).toFixed(2)}%</td>
+                  <td className="px-4 py-2 text-xs text-green-600 font-bold">1.42e-6</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="p-4 bg-gray-50 border-t border-gray-100 flex items-center justify-center">
+            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Showing first 8 of 14,202 rows</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (ext === 'json' || ext === 'xml') {
+      return (
+        <div className="bg-gray-900 rounded-xl p-6 font-mono text-sm leading-relaxed overflow-x-auto shadow-inner border border-gray-800">
+          <pre className="text-blue-300">
+            {`{
+  "project": "${project.name}",
+  "version": "1.0.4-stable",
+  "nodes": {
+    "count": 128,
+    "architecture": "x86_64",
+    "accelerators": "NVIDIA A100"
+  },
+  "parameters": {
+    "mesh_resolution": "high",
+    "time_step": 0.001,
+    "max_iterations": 50000,
+    "boundary_conditions": "dynamic_atmospheric"
+  },
+  "status": "ready"
+}`}
+          </pre>
+        </div>
+      );
+    }
+
+    if (ext === 'png' || ext === 'jpg') {
+      return (
+        <div className="flex flex-col items-center">
+          <div className="w-full aspect-video bg-gray-100 rounded-xl border border-dashed border-gray-300 flex flex-col items-center justify-center relative group overflow-hidden">
+            <ImageIcon size={48} className="text-gray-300 mb-2 group-hover:scale-110 transition-transform" />
+            <p className="text-sm font-bold text-gray-400">Simulation Render Preview</p>
+            <p className="text-[10px] text-gray-300">Resolution: 1920x1080px</p>
+            <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+          </div>
+          <p className="mt-4 text-xs text-gray-500 italic">Visual representation of the aerodynamic flow fields around the EV chassis at 120km/h.</p>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex flex-col items-center justify-center py-20 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
+        <Database size={48} className="text-gray-300 mb-4" />
+        <h4 className="text-gray-900 font-bold">Binary Data View</h4>
+        <p className="text-sm text-gray-500 mt-1">Direct visualization not supported for .{ext} extension.</p>
+        <button className="mt-6 px-6 py-2 bg-white border border-gray-200 text-blue-600 font-bold rounded-xl hover:bg-blue-50 transition-colors shadow-sm flex items-center">
+          <Download size={16} className="mr-2" /> Download to Local Storage
+        </button>
+      </div>
+    );
   };
 
   return (
@@ -279,14 +318,16 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
           <div className="flex space-x-2 mr-2">
             <button 
               onClick={() => setIsManageModalOpen(true)}
-              className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors flex items-center text-black shadow-sm"
+              className="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-semibold hover:bg-gray-50 transition-colors flex items-center text-black shadow-sm active:scale-95"
             >
               <Users size={16} className="mr-2" />
               Team
             </button>
+            {/* EXPLICIT Project Settings Button */}
             <button 
+              id="project-settings-btn"
               onClick={() => setIsSettingsModalOpen(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors shadow-sm flex items-center"
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 hover:shadow-md transition-all shadow-sm flex items-center active:scale-95"
             >
               <Settings2 size={16} className="mr-2" />
               Settings
@@ -296,10 +337,10 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
           <div className="flex items-center space-x-2">
             <NotificationMenu />
             <UserMenu 
-              userProjects={userProjects}
-              onLogout={onLogout}
+              userProjects={[]} 
+              onLogout={() => window.location.reload()} 
               trigger={
-                <div className="h-10 w-10 bg-blue-100 border border-blue-200 rounded-full flex items-center justify-center text-blue-600 font-bold text-sm hover:bg-blue-200 transition-colors cursor-pointer shadow-sm">
+                <div className="h-10 w-10 bg-blue-100 border border-blue-200 rounded-full flex items-center justify-center text-blue-600 font-bold text-sm shadow-sm cursor-pointer hover:ring-2 hover:ring-blue-500 transition-all">
                   ME
                 </div>
               }
@@ -336,19 +377,10 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
           <Terminal size={18} className="mr-2" />
           HPC Cluster
         </button>
-        <button
-          onClick={() => setActiveTab('ai')}
-          className={`pb-4 px-6 text-sm font-semibold border-b-2 transition-colors whitespace-nowrap flex items-center ${
-            activeTab === 'ai' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-400 hover:text-gray-600'
-          }`}
-        >
-          <MessageSquare size={18} className="mr-2" />
-          AI Assistant
-        </button>
       </div>
 
       {activeTab === 'docs' && (
-        <div className="space-y-6 animate-in fade-in zoom-in-95 duration-200 pb-24 text-black">
+        <div className="space-y-6 animate-in fade-in zoom-in-95 duration-200 pb-24">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="relative w-full max-w-sm">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
@@ -359,14 +391,6 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
                 placeholder="Search documents by title, author, or type..." 
                 className="w-full pl-10 pr-10 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none text-black bg-white"
               />
-              {docSearchTerm && (
-                <button 
-                  onClick={() => setDocSearchTerm('')}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  <X size={14} />
-                </button>
-              )}
             </div>
             <div className="flex space-x-2 w-full sm:w-auto">
               <button 
@@ -375,10 +399,7 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
               >
                 <Upload size={16} className="mr-2" /> Upload File
               </button>
-              <button 
-                onClick={() => setIsNewDraftModalOpen(true)}
-                className="flex-1 sm:flex-none px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold flex items-center justify-center hover:bg-blue-700 shadow-md transition-all active:scale-95"
-              >
+              <button className="flex-1 sm:flex-none px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold flex items-center justify-center hover:bg-blue-700 shadow-md">
                 <Plus size={16} className="mr-2" /> New Draft
               </button>
             </div>
@@ -386,10 +407,10 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
 
           <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm">
             {filteredDocuments.length > 0 ? (
-              <table className="min-w-full divide-y divide-gray-100">
+              <table className="min-w-full divide-y divide-gray-100 text-black">
                 <thead className="bg-gray-50/50">
                   <tr>
-                    <th className="px-6 py-4 text-left w-12 text-black">
+                    <th className="px-6 py-4 text-left w-12">
                       <button onClick={toggleSelectAll} className="text-blue-600 hover:opacity-80 transition-opacity">
                         {selectedDocIds.length === filteredDocuments.length && filteredDocuments.length > 0 ? <CheckSquare size={18} /> : <Square size={18} className="text-gray-300" />}
                       </button>
@@ -454,8 +475,8 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
                               </button>
                             )}
                             <button 
-                              onClick={() => setViewingDoc(doc)}
-                              className="text-blue-600 text-xs font-bold hover:underline px-2 py-1 hover:bg-blue-50 rounded-md transition-colors"
+                              onClick={() => setPreviewDoc(doc)}
+                              className="text-blue-600 text-xs font-bold hover:underline"
                             >
                               View
                             </button>
@@ -468,20 +489,8 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
               </table>
             ) : (
               <div className="flex flex-col items-center justify-center py-24 px-6 text-center bg-gray-50/50">
-                <div className="w-16 h-16 bg-white border border-gray-100 rounded-2xl flex items-center justify-center text-gray-300 shadow-sm mb-4">
-                  <FileQuestion size={32} />
-                </div>
+                <FileQuestion size={32} className="text-gray-300 mb-4" />
                 <h4 className="text-lg font-bold text-gray-900">No results found</h4>
-                <p className="text-sm text-gray-500 max-w-xs mx-auto mt-2">
-                  We couldn't find any documents matching "<span className="text-blue-600 font-semibold">{docSearchTerm}</span>". 
-                  Try adjusting your search criteria.
-                </p>
-                <button 
-                  onClick={() => setDocSearchTerm('')}
-                  className="mt-6 px-4 py-2 text-xs font-bold text-blue-600 hover:text-blue-800"
-                >
-                  Clear search
-                </button>
               </div>
             )}
           </div>
@@ -489,7 +498,7 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
           {/* Selection Sticky Bar */}
           {selectedDocIds.length > 0 && (
             <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-40 animate-in slide-in-from-bottom-8 duration-300">
-              <div className="glass bg-white/90 border border-blue-100 px-8 py-4 rounded-2xl shadow-2xl flex items-center space-x-8">
+              <div className="glass bg-white/90 border border-blue-100 px-8 py-4 rounded-2xl shadow-2xl flex items-center space-x-8 text-black">
                 <div className="flex items-center space-x-4">
                   <div className="w-10 h-10 bg-blue-600 text-white rounded-xl flex items-center justify-center font-black">
                     {selectedDocIds.length}
@@ -511,7 +520,7 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
                     onClick={handlePrepareSimulation}
                     className="px-6 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-200 hover:bg-blue-700 active:scale-95 transition-all flex items-center"
                   >
-                    <Terminal size={16} className="mr-2" /> Run in Cluster
+                    <Terminal size={16} className="mr-2" /> Use in Simulation
                   </button>
                 </div>
               </div>
@@ -521,7 +530,7 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
       )}
 
       {activeTab === 'files' && (
-        <div className="space-y-6 animate-in fade-in zoom-in-95 duration-200 pb-24 text-black">
+        <div className="space-y-6 animate-in fade-in zoom-in-95 duration-200 pb-24">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
              <div className="relative w-full max-w-sm">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
@@ -532,14 +541,6 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
                 placeholder="Search by filename, extension..." 
                 className="w-full pl-10 pr-10 py-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none text-black bg-white"
               />
-              {fileSearchTerm && (
-                <button 
-                  onClick={() => setFileSearchTerm('')}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                >
-                  <X size={14} />
-                </button>
-              )}
             </div>
             <div className="flex space-x-2 w-full sm:w-auto">
               <button 
@@ -547,9 +548,6 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
                 className="flex-1 sm:flex-none px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium flex items-center justify-center hover:bg-gray-50 text-black shadow-sm"
               >
                 <Plus size={16} className="mr-2" /> Add Data File
-              </button>
-              <button className="flex-1 sm:flex-none px-4 py-2 bg-blue-50 text-blue-600 border border-blue-100 rounded-lg text-sm font-bold flex items-center justify-center hover:bg-blue-100 transition-colors">
-                <Filter size={16} className="mr-2" /> Filter
               </button>
             </div>
           </div>
@@ -563,17 +561,13 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
                   </div>
                   <div className="flex items-center space-x-2">
                     <button 
-                      onClick={() => setViewingFile(file)}
+                      onClick={() => setPreviewFile(file)}
                       className="p-1.5 text-gray-400 hover:text-blue-600 transition-colors" 
-                      title="Preview"
+                      title="View File"
                     >
-                      <Eye size={14} />
+                      <Eye size={16} />
                     </button>
-                    <button 
-                      onClick={() => handleDownloadFile(file)}
-                      className="p-1.5 text-gray-400 hover:text-blue-600 transition-colors" 
-                      title="Download"
-                    >
+                    <button className="p-1.5 text-gray-400 hover:text-blue-600 transition-colors" title="Download">
                       <Download size={14} />
                     </button>
                     {isOwner && (
@@ -606,33 +600,14 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
                   </div>
                   <span className="text-[10px] text-gray-400 font-medium">{file.timestamp}</span>
                 </div>
-                
-                {/* Category tag */}
-                <div className="absolute top-4 right-12 text-[9px] font-black uppercase tracking-widest text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity">
-                  {file.category}
-                </div>
               </div>
             ))}
-            
-            {filteredFiles.length === 0 && (
-              <div className="col-span-full py-16 flex flex-col items-center justify-center bg-gray-50/50 border border-dashed border-gray-200 rounded-2xl text-center">
-                <HardDrive size={40} className="text-gray-300 mb-4" />
-                <h4 className="text-gray-900 font-bold">No project files found</h4>
-                <p className="text-sm text-gray-500 max-w-xs mt-1">Upload research datasets or run simulations to generate output files here.</p>
-                <button 
-                  onClick={handleTriggerUpload}
-                  className="mt-6 px-4 py-2 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  Upload your first file
-                </button>
-              </div>
-            )}
           </div>
         </div>
       )}
 
       {activeTab === 'hpc' && (
-        <div className="animate-in fade-in duration-300 text-black">
+        <div className="animate-in fade-in duration-300">
           <HPCPortal 
             projectName={project.name} 
             inputDocs={stagedDocsForHPC}
@@ -641,67 +616,108 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
           />
         </div>
       )}
-      
-      {activeTab === 'ai' && <div className="animate-in fade-in duration-300 text-black"><AIAssistant projectDescription={project.description} /></div>}
 
       {/* Document Preview Modal */}
-      {viewingDoc && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[85vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-300 text-black">
-            <div className="px-8 py-4 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-10">
+      {previewDoc && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md animate-in fade-in duration-300 text-black">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl h-[90vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            {/* Toolbar */}
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
               <div className="flex items-center space-x-4">
-                <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl">
-                  <BookOpen size={20} />
+                <div className="p-2 bg-blue-600 text-white rounded-lg">
+                  <FileText size={20} />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-gray-900 leading-tight">{viewingDoc.title}</h3>
-                  <p className="text-xs text-gray-400 font-medium">{viewingDoc.type} • by {viewingDoc.author} • {viewingDoc.updatedAt}</p>
+                  <h3 className="font-bold text-gray-900 leading-tight">{previewDoc.title}</h3>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Nexus Internal Research Repository</p>
                 </div>
               </div>
-              <div className="flex items-center space-x-2">
-                <button className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" title="Print Document">
+              <div className="flex items-center space-x-2 text-black">
+                <button className="p-2 text-gray-400 hover:text-blue-600 hover:bg-white rounded-lg transition-all" title="Print">
                   <Printer size={18} />
                 </button>
-                <button className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-all" title="External Link">
-                  <ExternalLink size={18} />
+                <button className="p-2 text-gray-400 hover:text-blue-600 hover:bg-white rounded-lg transition-all" title="Share">
+                  <Share2 size={18} />
                 </button>
-                <div className="h-6 w-[1px] bg-gray-200 mx-2"></div>
-                <button onClick={() => setViewingDoc(null)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all">
+                <button className="p-2 text-gray-400 hover:text-blue-600 hover:bg-white rounded-lg transition-all" title="Download PDF">
+                  <FileDown size={18} />
+                </button>
+                <div className="w-px h-6 bg-gray-200 mx-2" />
+                <button onClick={() => setPreviewDoc(null)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all">
                   <X size={20} />
                 </button>
               </div>
             </div>
-            
-            <div className="flex-1 overflow-y-auto bg-gray-50/30 p-12 flex justify-center custom-scrollbar">
-              <div className="bg-white w-full max-w-3xl min-h-full shadow-[0_10px_40px_-15px_rgba(0,0,0,0.1)] rounded-sm border border-gray-100 p-16 font-serif">
-                <div className="prose prose-blue max-w-none text-gray-800 leading-[1.8]">
-                  {viewingDoc.content?.split('\n').map((line, i) => {
-                    if (line.startsWith('###')) return <h3 key={i} className="text-xl font-bold font-sans mt-8 mb-4 border-b border-gray-100 pb-2">{line.replace('###', '')}</h3>;
-                    if (line.startsWith('EXECUTIVE SUMMARY:')) return <p key={i} className="text-sm font-bold uppercase tracking-widest text-blue-600 mb-6 font-sans">{line}</p>;
-                    return <p key={i} className="mb-4 text-justify">{line}</p>;
-                  })}
+
+            {/* Content Area */}
+            <div className="flex-1 overflow-y-auto bg-gray-100/30 p-8 custom-scrollbar relative">
+              <div className="max-w-3xl mx-auto bg-white shadow-xl min-h-full p-12 relative overflow-hidden text-black">
+                {previewDoc.status !== 'Approved' && (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-[0.03] rotate-[-45deg] select-none text-black">
+                    <span className="text-9xl font-black uppercase">{previewDoc.type}</span>
+                  </div>
+                )}
+                <div className="border-b-2 border-gray-900 pb-8 mb-10 text-black">
+                  <div className="flex justify-between items-start mb-6">
+                    <span className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em] border-b border-blue-600 pb-1">Nexus Report ID: {previewDoc.id}</span>
+                    <div className={`px-3 py-1 rounded text-[10px] font-bold uppercase tracking-widest ${
+                      previewDoc.status === 'Approved' ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'
+                    }`}>
+                      {previewDoc.status}
+                    </div>
+                  </div>
+                  <h1 className="text-4xl font-extrabold text-gray-900 leading-tight mb-4">{previewDoc.title}</h1>
+                  <div className="flex items-center text-sm text-gray-500 space-x-4">
+                    <span className="flex items-center"><Users size={14} className="mr-1.5" /> {previewDoc.author}</span>
+                    <span className="w-1 h-1 bg-gray-300 rounded-full" />
+                    <span className="flex items-center"><Clock size={14} className="mr-1.5" /> {previewDoc.updatedAt}</span>
+                    <span className="w-1 h-1 bg-gray-300 rounded-full" />
+                    <span className="font-bold text-gray-700 uppercase tracking-tighter">{previewDoc.type}</span>
+                  </div>
+                </div>
+                <div className="space-y-8 text-gray-800 leading-relaxed text-sm">
+                  <section>
+                    <h2 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">I. Abstract</h2>
+                    <p className="italic">
+                      This research document outlines the primary observations and simulation results concerning {project.name}. 
+                      The following analysis integrates High-Performance Computing (HPC) datasets with qualitative research benchmarks 
+                      establish a baseline for upcoming simulation cycles.
+                    </p>
+                  </section>
+                  <section>
+                    <h2 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">II. Methodology</h2>
+                    <p>
+                      Data was gathered using standard atmospheric sensors and secondary meteorological proxies. 
+                      Initial mesh grids were constructed using Graph Neural Networks (GNNs) to optimize convergence rates 
+                      within the virtual testing environment.
+                    </p>
+                  </section>
+                  <div className="pt-12 mt-12 border-t border-gray-100 flex justify-between items-center text-[10px] text-gray-400 italic">
+                    <span>Generated by Nexus Automated Archival System</span>
+                    <span>CONFIDENTIAL - TEAM ACCESS ONLY</span>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="px-8 py-4 border-t border-gray-100 bg-white flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                  viewingDoc.status === 'Approved' ? 'bg-green-100 text-green-700' : 
-                  viewingDoc.status === 'In Review' ? 'bg-amber-100 text-amber-700' : 'bg-gray-100 text-gray-700'
-                }`}>
-                  {viewingDoc.status.toUpperCase()}
-                </span>
-                <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Workspace ID: {project.id}</span>
-              </div>
+            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end items-center space-x-3">
+              <p className="text-xs text-gray-400 mr-auto">Viewing page 1 of 1</p>
+              {isOwner && previewDoc.status !== 'Approved' && (
+                <button 
+                  onClick={() => {
+                    handleApproveDocument(previewDoc.id);
+                    setPreviewDoc(null);
+                  }}
+                  className="px-6 py-2 bg-green-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-green-100 flex items-center hover:bg-green-700 transition-all"
+                >
+                  <CheckCircle size={16} className="mr-2" /> Approve Publication
+                </button>
+              )}
               <button 
-                onClick={() => {
-                  setViewingDoc(null);
-                  setActiveTab('ai');
-                }}
-                className="px-6 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all flex items-center"
+                onClick={() => setPreviewDoc(null)}
+                className="px-6 py-2 bg-white border border-gray-200 text-black rounded-xl text-sm font-bold hover:bg-gray-100 transition-all shadow-sm"
               >
-                <Sparkles size={16} className="mr-2" /> Discuss with AI
+                Close Preview
               </button>
             </div>
           </div>
@@ -709,235 +725,120 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
       )}
 
       {/* File Preview Modal */}
-      {viewingFile && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md animate-in fade-in duration-300">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden animate-in zoom-in-95 duration-300 text-black">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
-              <div className="flex items-center space-x-3">
-                <div className="p-2 bg-white border border-gray-200 rounded-lg shadow-sm">
-                  {getFileIcon(viewingFile.extension)}
+      {previewFile && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-md animate-in fade-in duration-300">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl h-[85vh] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50/80 backdrop-blur-sm">
+              <div className="flex items-center space-x-4">
+                <div className={`p-2 rounded-lg ${
+                  previewFile.category === 'Result' ? 'bg-purple-100 text-purple-600' :
+                  previewFile.category === 'Data' ? 'bg-emerald-100 text-emerald-600' :
+                  'bg-blue-100 text-blue-600'
+                }`}>
+                  {getFileIcon(previewFile.extension)}
                 </div>
                 <div>
-                  <h3 className="font-bold text-gray-900 text-sm">{viewingFile.name}.{viewingFile.extension}</h3>
-                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{viewingFile.category} Asset • {viewingFile.size}</p>
+                  <h3 className="font-bold text-gray-900 text-lg leading-none">{previewFile.name}.{previewFile.extension}</h3>
                 </div>
               </div>
-              <button onClick={() => setViewingFile(null)} className="text-gray-400 hover:text-red-500 transition-colors">
+              <button onClick={() => setPreviewFile(null)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all">
                 <X size={20} />
               </button>
             </div>
-            
-            <div className="p-0">
-              {viewingFile.extension === 'png' || viewingFile.extension === 'jpg' ? (
-                <div className="bg-gray-100 p-12 flex items-center justify-center">
-                   <div className="w-full h-[300px] bg-white rounded-xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center text-gray-400">
-                     <FileBarChart size={48} className="mb-4 opacity-20" />
-                     <p className="text-sm font-medium">Binary Image Preview Rendering...</p>
-                   </div>
-                </div>
-              ) : (
-                <div className="bg-gray-900 p-6 overflow-hidden">
-                  <div className="flex items-center justify-between mb-4 border-b border-gray-800 pb-2">
-                    <div className="flex items-center space-x-2">
-                      <FileCode size={14} className="text-blue-400" />
-                      <span className="text-[10px] text-gray-500 font-mono font-bold uppercase tracking-widest">Source: {viewingFile.source}</span>
-                    </div>
-                    <button 
-                      onClick={() => {
-                        const raw = viewingFile.content || '';
-                        navigator.clipboard.writeText(raw);
-                        alert('Raw content copied to clipboard.');
-                      }}
-                      className="text-[10px] text-blue-400 font-bold hover:underline"
-                    >
-                      COPY RAW
-                    </button>
-                  </div>
-                  <pre className="text-blue-100 font-mono text-xs overflow-x-auto p-4 bg-gray-950/50 rounded-lg custom-scrollbar max-h-[400px]">
-                    {viewingFile.content || `[No preview available for this file type: ${viewingFile.extension}]`}
-                  </pre>
-                </div>
-              )}
+            <div className="flex-1 overflow-y-auto p-8 custom-scrollbar bg-gray-50/30">
+              {renderFilePreviewContent(previewFile)}
             </div>
-
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
-              <div className="flex items-center space-x-2">
-                <Info size={14} className="text-gray-400" />
-                <span className="text-[10px] text-gray-500 font-medium">System logged: Asset loaded into buffer from {viewingFile.source} hub.</span>
-              </div>
-              <div className="flex space-x-3">
-                <button onClick={() => setViewingFile(null)} className="px-4 py-2 text-xs font-bold text-gray-500 hover:text-gray-900">Close</button>
-                <button 
-                  onClick={() => handleDownloadFile(viewingFile)}
-                  className="px-6 py-2 bg-blue-600 text-white rounded-xl text-xs font-bold shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all flex items-center"
-                >
-                  <Download size={14} className="mr-2" /> Download Asset
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* New Draft Modal */}
-      {isNewDraftModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200 text-black">
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-blue-600 text-white">
-              <h3 className="font-bold flex items-center">
-                <Plus size={18} className="mr-2" /> New Research Draft
-              </h3>
-              <button onClick={() => setIsNewDraftModalOpen(false)} className="text-white/80 hover:text-white transition-colors">
-                <X size={20} />
-              </button>
-            </div>
-            <form onSubmit={handleCreateDraft} className="p-6">
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Draft Title</label>
-                  <input 
-                    autoFocus
-                    required
-                    type="text" 
-                    value={newDraftTitle} 
-                    onChange={e => setNewDraftTitle(e.target.value)}
-                    placeholder="e.g. Q4 Carbon Sequestration Hypotheses"
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none text-black"
-                  />
-                </div>
-                
-                <div className="p-4 bg-blue-50/50 border border-blue-100 rounded-xl flex items-start space-x-3 text-black">
-                  <Sparkles size={16} className="text-blue-600 mt-0.5 shrink-0" />
-                  <p className="text-[11px] text-blue-700 leading-relaxed">
-                    New drafts are marked as <strong>Pending</strong>. You can use the AI Assistant to generate a structure or upload research data to populate this document later.
-                  </p>
-                </div>
-
-                <div className="flex flex-col space-y-3 pt-4">
-                  <button type="submit" className="w-full py-3 bg-blue-600 text-white rounded-xl font-bold shadow-lg shadow-blue-100 hover:bg-blue-700 transition-all active:scale-[0.98]">
-                    Create Draft Document
-                  </button>
-                  <button 
-                    type="button" 
-                    onClick={() => {
-                      setIsNewDraftModalOpen(false);
-                      handleTriggerUpload();
-                    }}
-                    className="w-full py-2.5 bg-white border border-gray-200 text-gray-500 rounded-xl text-xs font-bold hover:bg-gray-50 transition-colors flex items-center justify-center"
-                  >
-                    <Upload size={14} className="mr-2" /> Upload existing file instead
-                  </button>
-                </div>
-              </div>
-            </form>
           </div>
         </div>
       )}
 
       {/* Manage Team Modal */}
       {isManageModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-200 text-black">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200 text-black">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-gray-50">
               <div>
                 <h3 className="font-bold">Team Management</h3>
-                <p className="text-xs text-gray-500">Add or remove researchers from this workspace.</p>
               </div>
               <button onClick={() => setIsManageModalOpen(false)} className="text-gray-400 hover:text-gray-600">
                 <X size={20} />
               </button>
             </div>
-            
             <div className="p-6">
               {isOwner && (
-                <form onSubmit={handleInviteMember} className="mb-8 p-4 bg-blue-50/50 border border-blue-100 rounded-xl">
-                  <h4 className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-3">Invite New Researcher</h4>
+                <form onSubmit={handleInviteMember} className="mb-8 p-4 bg-blue-50/50 border border-blue-100 rounded-xl text-black">
+                  <h4 className="text-xs font-bold text-blue-700 uppercase tracking-widest mb-3 text-black">Invite Researcher</h4>
                   <div className="flex gap-3">
                     <input 
                       required
                       value={inviteName}
                       onChange={e => setInviteName(e.target.value)}
-                      placeholder="Full Name" 
-                      className="flex-1 px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                      placeholder="Name" 
+                      className="flex-1 px-3 py-2 border rounded-lg text-sm bg-white" 
                     />
-                    <select 
-                      value={inviteRole}
-                      onChange={e => setInviteRole(e.target.value)}
-                      className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none"
-                    >
-                      <option>Researcher</option>
-                      <option>HPC Engineer</option>
-                      <option>Data Scientist</option>
-                      <option>External Auditor</option>
-                    </select>
-                    <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold shadow-lg shadow-blue-100">Invite</button>
+                    <button type="submit" className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold">Invite</button>
                   </div>
                 </form>
               )}
-
-              <div className="space-y-4">
-                <div className="flex items-center justify-between p-4 bg-white border border-gray-100 rounded-xl shadow-sm">
-                  <div className="flex items-center">
+              
+              <div className="space-y-4 text-black">
+                <div className="flex items-center justify-between p-4 bg-white border border-gray-100 rounded-xl shadow-sm text-black">
+                  <div className="flex items-center text-black">
                     <div className="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold mr-3">ME</div>
                     <div>
-                      <div className="text-sm font-bold flex items-center">You (Owner) <Crown size={14} className="ml-2 text-amber-500" /></div>
+                      <div className="text-sm font-bold flex items-center text-black">You (Owner) <Crown size={14} className="ml-2 text-amber-500" /></div>
                       <div className="text-xs text-blue-600 font-medium uppercase tracking-tighter">Primary Researcher</div>
                     </div>
                   </div>
-                  <span className="text-[10px] font-bold bg-blue-100 text-blue-600 px-2 py-1 rounded">ROOT ACCESS</span>
                 </div>
 
-                <div className="max-h-[300px] overflow-y-auto pr-2 space-y-3 custom-scrollbar">
-                  {project.team.map(member => (
-                    <div key={member.id} className="flex items-center justify-between p-3 border border-gray-50 rounded-xl hover:bg-gray-50 transition-colors group">
-                      <div className="flex items-center">
-                        <div className="w-10 h-10 bg-gray-100 text-gray-400 rounded-full flex items-center justify-center font-bold mr-3 border border-gray-200">{member.name.charAt(0)}</div>
-                        <div>
-                          <div className="text-sm font-bold text-gray-900">{member.name}</div>
-                          <div className="text-xs text-gray-500">{member.role} • <span className="font-bold text-blue-600">{member.accessLevel}</span></div>
-                        </div>
+                {project.team.map(member => (
+                  <div key={member.id} className="flex items-center justify-between p-3 border border-gray-50 rounded-xl hover:bg-gray-50 transition-colors group text-black">
+                    <div className="flex items-center">
+                      <div className="w-10 h-10 bg-gray-100 text-gray-400 rounded-full flex items-center justify-center font-bold mr-3 border border-gray-200">{member.name.charAt(0)}</div>
+                      <div>
+                        <div className="text-sm font-bold text-gray-900">{member.name}</div>
+                        <div className="text-xs text-gray-500">{member.role}</div>
                       </div>
-                      {isOwner && (
-                        <button onClick={() => handleRemoveMember(member.id)} className="p-2 text-red-400 hover:bg-red-50 rounded-lg hover:text-red-600 transition-all opacity-0 group-hover:opacity-100">
-                          <UserMinus size={18} />
-                        </button>
-                      )}
                     </div>
-                  ))}
-                </div>
+                    {isOwner && (
+                      <button onClick={() => handleRemoveMember(member.id)} className="p-2 text-red-400 hover:bg-red-50 rounded-lg transition-all opacity-0 group-hover:opacity-100">
+                        <UserMinus size={18} />
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
-            </div>
-
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
-              <button onClick={() => setIsManageModalOpen(false)} className="px-6 py-2 bg-white border border-gray-200 text-black font-bold rounded-xl hover:bg-gray-100 shadow-sm transition-colors">Close</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Project Settings Modal */}
+      {/* EXPLICIT Project Settings Modal */}
       {isSettingsModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200 text-black">
             <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-blue-600 text-white shadow-lg">
               <div className="flex items-center">
                 <Settings2 size={20} className="mr-2" />
                 <h3 className="font-bold">Workspace Configuration</h3>
               </div>
-              <button onClick={() => setIsSettingsModalOpen(false)} className="text-white/80 hover:text-white"><X size={20} /></button>
+              <button onClick={() => setIsSettingsModalOpen(false)} className="text-white/80 hover:text-white transition-colors">
+                <X size={20} />
+              </button>
             </div>
 
-            <div className="p-6">
+            <div className="p-6 text-black">
               {!isOwner && (
                 <div className="mb-6 p-4 bg-amber-50 border border-amber-100 rounded-xl flex items-start space-x-3 text-black">
                   <Info className="text-amber-600 shrink-0" size={18} />
-                  <p className="text-xs text-amber-700 leading-relaxed">
-                    You have <strong>Collaborator</strong> access. Most administrative settings are locked.
+                  <p className="text-xs text-amber-700 leading-relaxed text-black">
+                    You have <strong>Collaborator</strong> access. Project administrative settings are managed by the owner.
                   </p>
                 </div>
               )}
 
-              <div className="space-y-6">
+              <div className="space-y-6 text-black">
                 <section>
                   <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center">
                     <Shield size={14} className="mr-1.5" /> Access Control
@@ -980,12 +881,12 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
                   <div className="p-4 bg-gray-50 rounded-xl border border-gray-100">
                     <div className="flex items-center justify-between mb-4">
                       <div className="text-sm font-bold">Require Review for Publications</div>
-                      <div className="w-10 h-6 bg-blue-600 rounded-full flex items-center px-1">
-                        <div className="w-4 h-4 bg-white rounded-full translate-x-4"></div>
+                      <div className={`w-10 h-6 rounded-full flex items-center px-1 transition-colors ${isOwner ? 'bg-blue-600 cursor-pointer shadow-inner' : 'bg-gray-300'}`}>
+                        <div className={`w-4 h-4 bg-white rounded-full transition-transform shadow-sm ${isOwner ? 'translate-x-4' : 'translate-x-0'}`}></div>
                       </div>
                     </div>
                     <p className="text-[10px] text-gray-400 leading-tight">
-                      When active, all "Publication" type documents must be approved by an Owner before being eligible for the public Nexus research feed.
+                      When active, all "Publication" type documents must be approved by an Owner before being eligible for the public research feed.
                     </p>
                   </div>
                 </section>
@@ -995,7 +896,7 @@ const ProjectWorkspace: React.FC<Props> = ({ project, onBack, currentUserId, onU
             <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-end">
               <button 
                 onClick={() => setIsSettingsModalOpen(false)} 
-                className="px-6 py-2 bg-white border border-gray-200 text-black font-bold rounded-xl hover:bg-gray-100 shadow-sm transition-colors"
+                className="px-8 py-2 bg-white border border-gray-200 text-black font-bold rounded-xl hover:bg-gray-100 shadow-sm transition-colors active:scale-95"
               >
                 Done
               </button>

@@ -1,9 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { HPC_CLUSTERS } from '../constants';
 import { HPCCluster, SimulationResult, Document, ProjectFile } from '../types';
-import { MapPin, Cpu, Play, Activity, CheckCircle2, Loader2, Sparkles, FileText, X, Zap, DollarSign, Download } from 'lucide-react';
-import { summarizeSimulation } from '../services/geminiService';
+import { MapPin, Cpu, Play, Activity, CheckCircle2, Loader2, Sparkles, FileText, X, Zap, DollarSign, Download, Send, MessageSquareText } from 'lucide-react';
+import { summarizeSimulation, analyzeSimulationFollowUp } from '../services/geminiService';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Label } from 'recharts';
 
 interface Props {
@@ -13,6 +13,11 @@ interface Props {
   onSimulationComplete?: (file: ProjectFile) => void;
 }
 
+interface FollowUpMessage {
+  role: 'user' | 'model';
+  text: string;
+}
+
 const HPCPortal: React.FC<Props> = ({ projectName, inputDocs = [], onClearInput, onSimulationComplete }) => {
   const [selectedCluster, setSelectedCluster] = useState<HPCCluster | null>(null);
   const [isRunning, setIsRunning] = useState(false);
@@ -20,6 +25,12 @@ const HPCPortal: React.FC<Props> = ({ projectName, inputDocs = [], onClearInput,
   const [result, setResult] = useState<SimulationResult | null>(null);
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [nearbyCluster, setNearbyCluster] = useState<string | null>(null);
+
+  // Follow-up chat state
+  const [followUpInput, setFollowUpInput] = useState('');
+  const [followUpHistory, setFollowUpHistory] = useState<FollowUpMessage[]>([]);
+  const [isAskingFollowUp, setIsAskingFollowUp] = useState(false);
+  const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if ("geolocation" in navigator) {
@@ -40,11 +51,18 @@ const HPCPortal: React.FC<Props> = ({ projectName, inputDocs = [], onClearInput,
     }
   }, []);
 
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [followUpHistory]);
+
   const runSimulation = () => {
     if (!selectedCluster) return;
     setIsRunning(true);
     setProgress(0);
     setResult(null);
+    setFollowUpHistory([]);
 
     const interval = setInterval(() => {
       setProgress(prev => {
@@ -80,7 +98,6 @@ const HPCPortal: React.FC<Props> = ({ projectName, inputDocs = [], onClearInput,
 [EXIT] Exporting result set to Nexus S3.
     `.trim();
 
-    // Generate mock performance metrics
     const gpuPerf = "NVIDIA A100 @ 312 TFLOPS (Peak 87%)";
     const estimatedCost = `$${(Math.random() * 15 + 2.50).toFixed(2)}`;
 
@@ -95,7 +112,6 @@ const HPCPortal: React.FC<Props> = ({ projectName, inputDocs = [], onClearInput,
 
     setResult(simulationResult);
 
-    // Create a generated file for the project's File tab
     let generatedFileName = '';
     if (onSimulationComplete) {
       generatedFileName = `Result_${simulationResult.jobId}_Data_Analysis.xlsx`;
@@ -112,7 +128,6 @@ const HPCPortal: React.FC<Props> = ({ projectName, inputDocs = [], onClearInput,
     }
 
     setIsSummarizing(true);
-    // Include information about the generated files in the context sent to Gemini
     const summaryContext = `${projectName} (HPC Cluster: ${selectedCluster?.name}). 
     Output Files Generated: ${generatedFileName}. 
     Input Files Used: ${inputDocs.length > 0 ? inputDocs.map(d => d.title).join(', ') : 'None'}.`;
@@ -120,6 +135,59 @@ const HPCPortal: React.FC<Props> = ({ projectName, inputDocs = [], onClearInput,
     const summary = await summarizeSimulation(mockLogs, summaryContext);
     setResult(prev => prev ? { ...prev, summary } : null);
     setIsSummarizing(false);
+  };
+
+  const handleFollowUpQuestion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!followUpInput.trim() || !result || isAskingFollowUp) return;
+
+    const userQuestion = followUpInput;
+    setFollowUpInput('');
+    setFollowUpHistory(prev => [...prev, { role: 'user', text: userQuestion }]);
+    setIsAskingFollowUp(true);
+
+    try {
+      const historyForGemini = followUpHistory.map(m => ({
+        role: m.role,
+        parts: [{ text: m.text }]
+      }));
+
+      const stream = await analyzeSimulationFollowUp(
+        result.summary || '', 
+        result.logs, 
+        userQuestion, 
+        historyForGemini
+      );
+      
+      let assistantText = '';
+      setFollowUpHistory(prev => [...prev, { role: 'model', text: '' }]);
+
+      for await (const chunk of stream) {
+        assistantText += chunk.text;
+        setFollowUpHistory(prev => {
+          const updated = [...prev];
+          updated[updated.length - 1].text = assistantText;
+          return updated;
+        });
+      }
+    } catch (error) {
+      console.error(error);
+      setFollowUpHistory(prev => [...prev, { role: 'model', text: "I encountered an error analyzing your question. Please try again." }]);
+    } finally {
+      setIsAskingFollowUp(false);
+    }
+  };
+
+  const formatAnalysis = (text: string) => {
+    return text.split('\n').map((line, idx) => {
+      if (line.startsWith('- ') || line.startsWith('* ')) {
+        return <li key={idx} className="ml-4 mb-1 list-disc">{line.substring(2)}</li>;
+      }
+      if (line.match(/^[A-Z][^a-z]+:$/) || line.includes('###') || line.includes('Interpretation') || line.includes('Takeaway') || line.includes('Finding')) {
+        return <h4 key={idx} className="font-bold text-gray-900 mt-4 mb-2 uppercase text-xs tracking-wider border-l-2 border-blue-500 pl-2">{line.replace(/###/g, '').trim()}</h4>;
+      }
+      return <p key={idx} className="mb-2 whitespace-pre-wrap">{line}</p>;
+    });
   };
 
   return (
@@ -132,10 +200,7 @@ const HPCPortal: React.FC<Props> = ({ projectName, inputDocs = [], onClearInput,
               <h3 className="text-white font-bold text-xs uppercase tracking-widest flex items-center">
                 <FileText className="mr-2" size={14} /> Staged Input Data
               </h3>
-              <button 
-                onClick={onClearInput}
-                className="text-white/60 hover:text-white transition-colors"
-              >
+              <button onClick={onClearInput} className="text-white/60 hover:text-white transition-colors">
                 <X size={14} />
               </button>
             </div>
@@ -147,9 +212,6 @@ const HPCPortal: React.FC<Props> = ({ projectName, inputDocs = [], onClearInput,
                 </div>
               ))}
             </div>
-            <p className="text-[10px] text-white/50 mt-3 italic">
-              These files will be used as initial conditions for the simulation mesh.
-            </p>
           </div>
         )}
 
@@ -165,9 +227,7 @@ const HPCPortal: React.FC<Props> = ({ projectName, inputDocs = [], onClearInput,
                 disabled={cluster.status !== 'Online' || isRunning}
                 onClick={() => setSelectedCluster(cluster)}
                 className={`w-full p-4 rounded-xl border text-left transition-all text-black ${
-                  selectedCluster?.id === cluster.id
-                    ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200'
-                    : 'border-gray-100 hover:border-blue-200 bg-white'
+                  selectedCluster?.id === cluster.id ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' : 'border-gray-100 hover:border-blue-200 bg-white'
                 } ${cluster.status !== 'Online' ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 <div className="flex justify-between items-start">
@@ -178,9 +238,6 @@ const HPCPortal: React.FC<Props> = ({ projectName, inputDocs = [], onClearInput,
                       {cluster.location}
                     </div>
                   </div>
-                  {nearbyCluster === cluster.id && (
-                    <span className="text-[10px] bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-bold">NEARBY</span>
-                  )}
                 </div>
                 <div className="mt-3 flex items-center justify-between">
                   <span className="text-xs font-medium text-gray-400">{cluster.nodes} Nodes</span>
@@ -197,26 +254,16 @@ const HPCPortal: React.FC<Props> = ({ projectName, inputDocs = [], onClearInput,
             disabled={!selectedCluster || isRunning}
             className="w-full py-4 bg-blue-600 text-white rounded-xl font-bold flex items-center justify-center space-x-2 disabled:bg-gray-300 hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200"
           >
-            {isRunning ? (
-              <><Loader2 className="animate-spin" /> <span>Running {progress}%</span></>
-            ) : (
-              <><Play size={18} /> <span>Submit Job</span></>
-            )}
+            {isRunning ? <><Loader2 className="animate-spin" /> <span>Running {progress}%</span></> : <><Play size={18} /> <span>Submit Job</span></>}
           </button>
         </div>
       </div>
 
       <div className="lg:col-span-2 space-y-6">
         {isRunning && (
-          <div className="bg-blue-600/5 border border-blue-100 rounded-2xl p-8 flex flex-col items-center justify-center text-center animate-pulse">
+          <div className="bg-blue-600/5 border border-blue-100 rounded-2xl p-12 flex flex-col items-center justify-center text-center animate-pulse">
             <Loader2 size={48} className="text-blue-600 animate-spin mb-4" />
-            <h4 className="text-xl font-bold text-black">Simulation in Progress</h4>
-            <p className="text-gray-500 max-w-sm mt-2">Connecting to {selectedCluster?.name}. Allocating nodes and pushing environment variables.</p>
-            {inputDocs.length > 0 && (
-              <div className="mt-4 px-3 py-1 bg-blue-100 text-blue-700 text-[10px] font-bold rounded-full">
-                PROCESSING {inputDocs.length} INPUT FILES
-              </div>
-            )}
+            <h4 className="text-xl font-bold text-black">HPC Node Allocation</h4>
             <div className="w-full max-w-md bg-gray-200 h-2 rounded-full mt-6 overflow-hidden">
               <div className="bg-blue-600 h-full transition-all duration-300" style={{ width: `${progress}%` }}></div>
             </div>
@@ -227,7 +274,6 @@ const HPCPortal: React.FC<Props> = ({ projectName, inputDocs = [], onClearInput,
           <div className="bg-white border border-dashed border-gray-300 rounded-2xl p-12 flex flex-col items-center justify-center text-center opacity-60">
             <Activity size={48} className="text-gray-300 mb-4" />
             <h4 className="text-lg font-medium text-gray-500">No Active Simulations</h4>
-            <p className="text-gray-400 text-sm mt-1">Select an HPC cluster to begin your testing cycle.</p>
           </div>
         )}
 
@@ -239,108 +285,106 @@ const HPCPortal: React.FC<Props> = ({ projectName, inputDocs = [], onClearInput,
                   <CheckCircle2 className="text-green-500 mr-2" size={20} />
                   Job Results: {result.jobId}
                 </h3>
-                <div className="flex items-center space-x-3">
-                   <span className="text-xs text-gray-400 font-medium uppercase tracking-wider">{result.timestamp}</span>
-                   <div className="px-2 py-1 bg-blue-50 text-blue-600 text-[10px] font-bold rounded border border-blue-100 flex items-center">
-                     <Download size={10} className="mr-1" /> EXPORTED TO FILES
-                   </div>
-                </div>
               </div>
               
-              {/* Performance Metrics Bar */}
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <div className="bg-blue-50 border border-blue-100 p-4 rounded-xl flex items-center">
-                  <div className="p-2 bg-blue-600 text-white rounded-lg mr-3">
-                    <Zap size={18} />
-                  </div>
-                  <div>
-                    <div className="text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-0.5">Compute Resource</div>
-                    <div className="text-sm font-bold text-gray-900">{result.gpuPerformance}</div>
-                  </div>
-                </div>
-                <div className="bg-emerald-50 border border-emerald-100 p-4 rounded-xl flex items-center">
-                  <div className="p-2 bg-emerald-600 text-white rounded-lg mr-3">
-                    <DollarSign size={18} />
-                  </div>
-                  <div>
-                    <div className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-0.5">Job Usage Cost</div>
-                    <div className="text-sm font-bold text-gray-900">{result.cost} <span className="text-[10px] text-gray-400 font-normal">(Auto-billed)</span></div>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="h-[300px] w-full mb-6 text-black">
+              <div className="h-[250px] w-full mb-6">
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={result.dataPoints} margin={{ top: 10, right: 30, left: 20, bottom: 40 }}>
+                  <LineChart data={result.dataPoints}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis 
-                      dataKey="x" 
-                      stroke="#94a3b8" 
-                      fontSize={10} 
-                      tickLine={false}
-                      axisLine={false}
-                    >
-                      <Label 
-                        value="Time (Cycles)" 
-                        offset={-25} 
-                        position="insideBottom" 
-                        style={{ fontSize: '10px', fontWeight: 'bold', fill: '#94a3b8', textTransform: 'uppercase' }} 
-                      />
+                    <XAxis dataKey="x" stroke="#94a3b8" fontSize={10}>
+                      <Label value="Time" offset={-10} position="insideBottom" style={{ fontSize: '10px', fontWeight: 'bold', fill: '#94a3b8' }} />
                     </XAxis>
-                    <YAxis 
-                      stroke="#94a3b8" 
-                      fontSize={10} 
-                      tickLine={false}
-                      axisLine={false}
-                    >
-                      <Label 
-                        value="Megawatts" 
-                        angle={-90} 
-                        position="insideLeft" 
-                        offset={15}
-                        style={{ fontSize: '10px', fontWeight: 'bold', fill: '#94a3b8', textTransform: 'uppercase', textAnchor: 'middle' }} 
-                      />
+                    <YAxis stroke="#94a3b8" fontSize={10}>
+                      <Label value="Megawatts" angle={-90} position="insideLeft" offset={10} style={{ fontSize: '10px', fontWeight: 'bold', fill: '#94a3b8' }} />
                     </YAxis>
-                    <Tooltip contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', color: 'black' }} />
-                    <Line type="monotone" dataKey="y" stroke="#2563eb" strokeWidth={3} dot={false} animationDuration={1000} />
+                    <Tooltip />
+                    <Line type="monotone" dataKey="y" stroke="#2563eb" strokeWidth={3} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
               </div>
 
               <div className="grid grid-cols-1 gap-6">
-                <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-6 flex flex-col shadow-sm">
-                  <div className="flex items-center text-blue-700 font-bold text-base mb-4">
-                    <Sparkles size={18} className="mr-2" />
-                    Professional Data Interpretation
-                  </div>
-                  {isSummarizing ? (
-                    <div className="flex-1 flex items-center justify-center py-8">
-                      <div className="flex flex-col items-center">
-                        <Loader2 className="animate-spin text-blue-400 mb-2" size={32} />
-                        <span className="text-xs text-blue-400 font-bold uppercase tracking-widest">Synthesizing statistical results...</span>
-                      </div>
+                {/* AI Contextual Analysis Card */}
+                <div className="bg-blue-50/50 border border-blue-200 rounded-2xl overflow-hidden flex flex-col shadow-sm">
+                  <div className="px-6 py-4 bg-white border-b border-blue-100 flex items-center justify-between">
+                    <div className="flex items-center text-blue-700 font-bold text-base">
+                      <Sparkles size={18} className="mr-2" />
+                      Professional Data Interpretation
                     </div>
-                  ) : (
-                    <div className="prose prose-sm max-w-none text-black leading-relaxed">
-                      {result.summary?.split('\n').map((line, idx) => {
-                        if (line.startsWith('- ')) {
-                          return <li key={idx} className="ml-4 mb-1">{line.substring(2)}</li>;
-                        }
-                        if (line.match(/^[A-Z][^a-z]+:$/) || line.includes('###') || line.includes('Interpretation') || line.includes('Takeaway')) {
-                          return <h4 key={idx} className="font-bold text-gray-900 mt-4 mb-2 uppercase text-xs tracking-wider">{line.replace(/###/g, '')}</h4>;
-                        }
-                        return <p key={idx} className="mb-2 whitespace-pre-wrap">{line}</p>;
-                      })}
+                    <div className="text-[10px] font-black bg-blue-600 text-white px-2 py-0.5 rounded uppercase tracking-widest">
+                      AI Statistical Expert
+                    </div>
+                  </div>
+
+                  <div className="p-6 max-h-[500px] overflow-y-auto custom-scrollbar">
+                    {isSummarizing ? (
+                      <div className="flex flex-col items-center py-12">
+                        <Loader2 className="animate-spin text-blue-400 mb-2" size={32} />
+                        <span className="text-xs text-blue-400 font-bold uppercase tracking-widest">Compiling statistical takeaways...</span>
+                      </div>
+                    ) : (
+                      <div className="space-y-6">
+                        {/* Initial Analysis Result */}
+                        <div className="prose prose-sm max-w-none text-black leading-relaxed">
+                          {formatAnalysis(result.summary || '')}
+                        </div>
+
+                        {/* Follow-up Chat History */}
+                        {followUpHistory.length > 0 && (
+                          <div className="pt-6 border-t border-blue-100 space-y-4">
+                            <h5 className="text-[10px] font-bold text-blue-400 uppercase tracking-widest mb-4 flex items-center">
+                              <MessageSquareText size={12} className="mr-1" /> Follow-up Discussion
+                            </h5>
+                            {followUpHistory.map((m, idx) => (
+                              <div key={idx} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                <div className={`max-w-[85%] p-3 rounded-xl text-sm ${
+                                  m.role === 'user' 
+                                    ? 'bg-blue-600 text-white rounded-br-none font-medium' 
+                                    : 'bg-white border border-blue-100 text-gray-800 rounded-bl-none shadow-sm'
+                                }`}>
+                                  {m.text || <Loader2 className="animate-spin" size={14} />}
+                                </div>
+                              </div>
+                            ))}
+                            <div ref={chatEndRef} />
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Follow-up Question Box */}
+                  {!isSummarizing && result.summary && (
+                    <div className="p-4 bg-white border-t border-blue-100">
+                      <form onSubmit={handleFollowUpQuestion} className="relative flex items-center">
+                        <input
+                          type="text"
+                          value={followUpInput}
+                          onChange={(e) => setFollowUpInput(e.target.value)}
+                          placeholder="Ask a question about this data analysis..."
+                          disabled={isAskingFollowUp}
+                          className="w-full pl-4 pr-12 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none transition-all text-black shadow-inner"
+                        />
+                        <button
+                          type="submit"
+                          disabled={!followUpInput.trim() || isAskingFollowUp}
+                          className="absolute right-2 p-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-200 transition-colors shadow-sm"
+                        >
+                          {isAskingFollowUp ? <Loader2 className="animate-spin" size={18} /> : <Send size={18} />}
+                        </button>
+                      </form>
+                      <p className="text-[9px] text-gray-400 mt-2 text-center font-medium">
+                        Ask about outliers, specific trends, or what these results mean for your project objectives.
+                      </p>
                     </div>
                   )}
                 </div>
 
-                <div className="bg-gray-900 rounded-xl p-4 overflow-hidden border border-gray-800">
+                <div className="bg-gray-900 rounded-xl p-4 border border-gray-800">
                   <div className="text-[10px] text-gray-500 font-mono mb-2 uppercase tracking-widest flex justify-between">
-                    <span>HPC Execution Logs</span>
-                    <span className="text-green-500/50">RAW_OUTPUT</span>
+                    <span>HPC Node Execution Logs</span>
                   </div>
-                  <pre className="text-green-400 font-mono text-[10px] overflow-y-auto max-h-[150px] custom-scrollbar leading-tight">
+                  <pre className="text-green-400 font-mono text-[10px] overflow-y-auto max-h-[120px] custom-scrollbar leading-tight">
                     {result.logs}
                   </pre>
                 </div>
