@@ -5,7 +5,6 @@
 Originally built collaboratively as a hackathon prototype. This standalone repository continues that work, with future development maintained by Prarth Gupta with the original teammates' permission.
 
 - Original team repository: [Sunnerroots/Cognexus](https://github.com/Sunnerroots/Cognexus)
-- Preserved hackathon fork: [Prarth314/Cognexus-hackathon-archive](https://github.com/Prarth314/Cognexus-hackathon-archive)
 - The original Git commit history and authorship have been preserved. The original prototype was a team effort; this repository does not claim sole authorship of that work.
 
 ---
