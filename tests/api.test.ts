@@ -21,7 +21,7 @@ async function register(name: string,email: string) {
 }
 before(async () => {
   directory = await mkdtemp(path.join(os.tmpdir(),'cognexus-tests-'));
-  const config = readConfig({ DATA_DIR:directory });
+  const config = readConfig({ DATA_DIR:directory, DATABASE_URL:process.env.TEST_DATABASE_URL });
   const db = await openDatabase(config,true);
   service = await buildApp({ config,db,worker:false,logger:false });
   ownerCookie = (await register('Owner','owner@example.org')).cookie;
@@ -111,4 +111,64 @@ test('queued cancellation survives worker polling and is audited', async () => {
   assert.equal((await service.app.inject({ url:`/api/runs/${id}`,headers:headers(ownerCookie) })).json().status,'cancelled');
   const audit=(await service.app.inject({ url:`/api/projects/${projectId}/audit`,headers:headers(ownerCookie) })).json() as { action:string }[];
   assert.ok(audit.some(e=>e.action==='run.cancelled'));
+});
+
+async function submitReference(key:string) {
+  const response=await service.app.inject({method:'POST',url:`/api/projects/${projectId}/runs`,headers:{...headers(ownerCookie),'idempotency-key':key},payload:{workflow:'monte-carlo-pi',parameters:{samples:1000,seed:42}}});
+  assert.equal(response.statusCode,201,response.body);return response.json().id as string;
+}
+async function pollWorker() {
+  const runner=createRunner(service.db,service.storage,{error:error=>{throw error;}});
+  try{await runner.tick();}finally{await runner.stop();}
+}
+test('expired leases recover pure local execution without creating a new logical run',async()=>{
+  const id=await submitReference('lease-recovery-test');
+  await service.db.query(`UPDATE runs SET status='running',attempt=1,lease_until=now()-interval '1 second' WHERE id=$1`,[id]);
+  await pollWorker();
+  const response=await service.app.inject({url:`/api/runs/${id}`,headers:headers(ownerCookie)});
+  assert.equal(response.json().status,'succeeded',response.body);assert.equal(response.json().attempt,2);
+});
+test('recovery is bounded and exhausted runs become terminal',async()=>{
+  const id=await submitReference('recovery-limit-test');
+  await service.db.query(`UPDATE runs SET status='running',attempt=3,lease_until=now()-interval '1 second' WHERE id=$1`,[id]);
+  await pollWorker();
+  const response=await service.app.inject({url:`/api/runs/${id}`,headers:headers(ownerCookie)});
+  assert.equal(response.json().status,'failed');assert.match(response.json().error,/recovery limit/);
+});
+test('corrupted inputs fail integrity validation instead of producing scientific output',async()=>{
+  const original=await service.storage.get(fileId);
+  const response=await service.app.inject({method:'POST',url:`/api/projects/${projectId}/runs`,headers:{...headers(ownerCookie),'idempotency-key':'integrity-test-key'},payload:{workflow:'csv-summary',inputFileId:fileId,parameters:{column:'value'}}});
+  assert.equal(response.statusCode,201,response.body);
+  await service.storage.remove(fileId);await service.storage.put(fileId,Buffer.from('value\n999\n'));
+  try{
+    await pollWorker();
+    const run=await service.app.inject({url:`/api/runs/${response.json().id}`,headers:headers(ownerCookie)});
+    assert.equal(run.json().status,'failed');assert.match(run.json().error,/checksum mismatch/);assert.equal(run.json().result,null);
+    assert.equal((await service.app.inject({url:`/api/files/${fileId}/download`,headers:headers(ownerCookie)})).statusCode,409);
+  }finally{await service.storage.remove(fileId);await service.storage.put(fileId,original);}
+});
+test('concurrent project queue limits reject excessive jobs',async()=>{
+  const ids=[];for(let i=0;i<3;i++)ids.push(await submitReference(`quota-limit-test-${i}`));
+  const response=await service.app.inject({method:'POST',url:`/api/projects/${projectId}/runs`,headers:{...headers(ownerCookie),'idempotency-key':'quota-overflow-test'},payload:{workflow:'monte-carlo-pi',parameters:{samples:1000,seed:1}}});
+  assert.equal(response.statusCode,429);
+  for(const id of ids)await service.app.inject({method:'POST',url:`/api/runs/${id}/cancel`,headers:headers(ownerCookie)});
+});
+test('expired invitations cannot create membership',async()=>{
+  const response=await service.app.inject({method:'POST',url:`/api/projects/${projectId}/invitations`,headers:headers(ownerCookie),payload:{email:'outsider@example.org',role:'collaborator'}});
+  assert.equal(response.statusCode,200,response.body);
+  await service.db.query(`UPDATE invitations SET expires_at=now()-interval '1 second' WHERE email='outsider@example.org'`);
+  const accepted=await service.app.inject({method:'POST',url:'/api/invitations/accept',headers:headers(outsiderCookie),payload:{token:response.json().token}});
+  assert.equal(accepted.statusCode,404);
+});
+test('revocation immediately blocks existing sessions from project resources',async()=>{
+  const list=await service.app.inject({url:`/api/projects/${projectId}/members`,headers:headers(ownerCookie)});
+  const viewer=list.json().find((member:MemberFixture)=>member.email==='viewer@example.org') as MemberFixture;
+  assert.equal((await service.app.inject({method:'DELETE',url:`/api/projects/${projectId}/members/${viewer.id}`,headers:headers(ownerCookie)})).statusCode,200);
+  assert.equal((await service.app.inject({url:`/api/files/${fileId}/download`,headers:headers(viewerCookie)})).statusCode,404);
+  assert.equal((await service.app.inject({url:`/api/runs/${runId}/manifest`,headers:headers(viewerCookie)})).statusCode,404);
+});
+type MemberFixture={id:string;email:string};
+test('logout revokes the server-side session',async()=>{
+  assert.equal((await service.app.inject({method:'POST',url:'/api/auth/logout',headers:headers(ownerCookie)})).statusCode,200);
+  assert.equal((await service.app.inject({url:'/api/projects',headers:headers(ownerCookie)})).statusCode,401);
 });
