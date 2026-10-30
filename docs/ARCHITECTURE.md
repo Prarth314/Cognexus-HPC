@@ -34,6 +34,6 @@ Deploy one application replica initially. It serves frontend assets, API, and on
 
 ## Important remaining failure windows
 
-Storage and PostgreSQL cannot commit atomically. A hard process crash between object creation and metadata registration may leave an orphaned object. Cleanup is best effort during normal operation. Schedule inventory reconciliation before sustained production ingestion. Back up database and artifacts together; see the deployment runbook.
+Storage and PostgreSQL cannot commit atomically. A hard process crash between object creation and metadata registration may leave an orphaned object. Cleanup is best effort during normal operation. The read-only [storage inspector](STORAGE_OPERATIONS.md) detects orphan candidates, missing bytes, and integrity failures; schedule and validate it before sustained production ingestion. Back up database and artifacts together; see the deployment runbook.
 
 Local pure execution can be repeated after a worker crash; external compute must use a separate adapter with submission reconciliation. Do not reuse this retry strategy for Slurm or any expensive side-effectful operation.

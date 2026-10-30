@@ -29,8 +29,6 @@ Errors return `{ error, requestId? }`; validation errors include field details. 
 | GET        | `/runs/:id/manifest`            | Execution manifest with input/output checksums                     |
 | GET / POST | `/runs/:id/analyses`            | Read explanations / ask `{question}` with configured AI            |
 
-## Submission
-
 ## Account and lifecycle endpoints
 
 | Method | Route                             | Purpose                                                                        |

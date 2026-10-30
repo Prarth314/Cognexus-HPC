@@ -18,7 +18,8 @@
     "db:migrate": "tsx server/migrate.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "storage:inspect": "tsx server/inspect-storage.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.0.0",

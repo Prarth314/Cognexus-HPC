@@ -83,6 +83,8 @@ flowchart LR
 
 Read the [architecture and tradeoffs](docs/ARCHITECTURE.md), [API reference](docs/API.md), and [capability checklist](docs/CAPABILITIES.md).
 
+Projects support [reversible archiving](docs/PROJECT_LIFECYCLE.md) with retained evidence. Operators can use the [read-only storage inspector](docs/STORAGE_OPERATIONS.md) to identify integrity failures and orphan candidates.
+
 ## Verification
 
 ```sh
