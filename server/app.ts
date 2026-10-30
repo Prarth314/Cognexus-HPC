@@ -168,13 +168,18 @@ export async function buildApp(
     connection = db,
   ) {
     const principal = user(request);
-    const [member] = await connection.query<{ role: Role }>(
-      'SELECT role FROM memberships WHERE project_id=$1 AND user_id=$2',
+    const [member] = await connection.query<{ role: Role; archived_at: string | null }>(
+      'SELECT m.role,p.archived_at FROM memberships m JOIN projects p ON p.id=m.project_id WHERE project_id=$1 AND user_id=$2',
       [projectId, principal.id],
     );
     if (!member) fail(404, 'Project not found');
     if ((write && member.role === 'viewer') || (owner && member.role !== 'owner'))
       fail(403, 'This action requires a higher project role');
+    if (write && member.archived_at)
+      fail(
+        409,
+        'Project is archived. An owner must restore it before adding or changing research.',
+      );
     return member.role;
   }
   async function audit(
@@ -318,8 +323,9 @@ export async function buildApp(
   app.patch('/api/projects/:projectId', async (request) => {
     const id = param(request, 'projectId'),
       body = projectSchema.parse(request.body);
-    await access(request, id, false, true);
     await db.transaction(async (tx) => {
+      await tx.query('SELECT id FROM projects WHERE id=$1 FOR UPDATE', [id]);
+      await access(request, id, true, true, tx);
       await tx.query('UPDATE projects SET name=$2,description=$3,domain=$4 WHERE id=$1', [
         id,
         body.name,
@@ -327,6 +333,36 @@ export async function buildApp(
         body.domain,
       ]);
       await audit(tx, id, user(request).id, 'project.updated');
+    });
+    return { ok: true };
+  });
+  app.post('/api/projects/:projectId/archive', async (request) => {
+    const id = param(request, 'projectId'),
+      body = z.object({ archived: z.boolean() }).parse(request.body);
+    await db.transaction(async (tx) => {
+      const [project] = await tx.query<{ archived_at: string | null }>(
+        'SELECT archived_at FROM projects WHERE id=$1 FOR UPDATE',
+        [id],
+      );
+      await access(request, id, false, true, tx);
+      if (Boolean(project.archived_at) === body.archived) return;
+      if (body.archived) {
+        const [{ count }] = await tx.query<{ count: number }>(
+          `SELECT count(*)::int AS count FROM runs WHERE project_id=$1 AND status IN ('queued','running')`,
+          [id],
+        );
+        if (count) fail(409, 'Finish or cancel active runs before archiving this project');
+      }
+      await tx.query(
+        'UPDATE projects SET archived_at=CASE WHEN $2::boolean THEN now() ELSE NULL END WHERE id=$1',
+        [id, body.archived],
+      );
+      await audit(
+        tx,
+        id,
+        user(request).id,
+        body.archived ? 'project.archived' : 'project.restored',
+      );
     });
     return { ok: true };
   });
@@ -394,7 +430,7 @@ export async function buildApp(
   });
   app.post('/api/projects/:projectId/invitations', async (request) => {
     const id = param(request, 'projectId');
-    await access(request, id, false, true);
+    await access(request, id, true, true);
     const body = z
       .object({
         email: z.email().transform((v) => v.toLowerCase()),
@@ -403,6 +439,8 @@ export async function buildApp(
       .parse(request.body);
     const value = token();
     await db.transaction(async (tx) => {
+      await tx.query('SELECT id FROM projects WHERE id=$1 FOR UPDATE', [id]);
+      await access(request, id, true, true, tx);
       await tx.query(
         `INSERT INTO invitations(id,project_id,token_hash,email,role,expires_at,created_by) VALUES($1,$2,$3,$4,$5,now()+interval '48 hours',$6)`,
         [randomUUID(), id, digest(value), body.email, body.role, user(request).id],
@@ -428,6 +466,15 @@ export async function buildApp(
       );
       if (!invite)
         fail(404, 'Invitation is invalid, expired, used, or addressed to a different account');
+      const [project] = await tx.query<{ archived_at: string | null }>(
+        'SELECT archived_at FROM projects WHERE id=$1 FOR UPDATE',
+        [invite.project_id],
+      );
+      if (project.archived_at)
+        fail(
+          409,
+          'Project is archived. Ask its owner to restore it before accepting an invitation.',
+        );
       await tx.query(
         'INSERT INTO memberships(project_id,user_id,role) VALUES($1,$2,$3) ON CONFLICT DO NOTHING',
         [invite.project_id, principal.id, invite.role],

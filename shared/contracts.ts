@@ -42,6 +42,7 @@ export interface User {
   email: string;
 }
 export interface Project {
+  archived_at: string | null;
   id: string;
   name: string;
   description: string;

@@ -48,8 +48,6 @@ Research should leave an inspectable trail. Cognexus connects a project's people
 ```sh
 git clone https://github.com/Prarth314/Cognexus-HPC.git
 cd Cognexus-HPC
-# Until the production-platform PR is merged:
-git switch codex/production-platform
 npm ci
 npm run dev
 ```

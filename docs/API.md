@@ -31,6 +31,24 @@ Errors return `{ error, requestId? }`; validation errors include field details. 
 
 ## Submission
 
+## Account and lifecycle endpoints
+
+| Method | Route                             | Purpose                                                                        |
+| ------ | --------------------------------- | ------------------------------------------------------------------------------ |
+| GET    | `/account/security`               | Current account sessions, unused-code count, and security activity             |
+| PATCH  | `/account/profile`                | Save `{name}`; email remains unchanged                                         |
+| POST   | `/account/password`               | `{currentPassword,newPassword}`; revoke old sessions and rotate current cookie |
+| POST   | `/account/recovery-codes`         | `{currentPassword}`; replace code set and return eight plaintext codes once    |
+| POST   | `/auth/recover`                   | `{email,code,newPassword}`; consume code and revoke all sessions               |
+| DELETE | `/account/sessions/:sessionId`    | Revoke an owned session                                                        |
+| POST   | `/account/sessions/revoke-others` | `{currentPassword}`; preserve only current session                             |
+| GET    | `/account/export`                 | Account metadata download, excluding authentication secrets                    |
+| POST   | `/projects/:id/archive`           | Owner; `{archived:true}` to archive, `false` to restore                        |
+
+Archived projects preserve authorized read access and membership administration but reject new research and invitations. Active jobs prevent archiving. All mutations retain the normal CSRF/origin requirements. See [account security](ACCOUNT_SECURITY.md) and [lifecycle rules](PROJECT_LIFECYCLE.md).
+
+## Submission details
+
 Include an `Idempotency-Key` header (8–128 letters/digits/underscore/hyphen). Repeating the same key and body returns the same logical run; reusing the key with different parameters returns 409.
 
 ```json

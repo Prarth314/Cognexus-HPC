@@ -50,6 +50,7 @@ export default function App() {
   const [selected, setSelected] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [query, setQuery] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
   const [creating, setCreating] = useState(false);
   const [joining, setJoining] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
@@ -142,8 +143,10 @@ export default function App() {
     );
   if (!session.user)
     return <Auth session={session} onSession={(user) => setSession({ ...session, user })} />;
-  const filtered = projects.filter((item) =>
-    `${item.name} ${item.description} ${item.domain}`.toLowerCase().includes(query.toLowerCase()),
+  const filtered = projects.filter(
+    (item) =>
+      Boolean(item.archived_at) === showArchived &&
+      `${item.name} ${item.description} ${item.domain}`.toLowerCase().includes(query.toLowerCase()),
   );
   return (
     <div className="app-shell">
@@ -378,6 +381,22 @@ export default function App() {
                   />
                 </label>
               </div>
+              <div className="project-filters" aria-label="Project archive filter">
+                <button
+                  className={!showArchived ? 'selected' : ''}
+                  aria-pressed={!showArchived}
+                  onClick={() => setShowArchived(false)}
+                >
+                  Active projects
+                </button>
+                <button
+                  className={showArchived ? 'selected' : ''}
+                  aria-pressed={showArchived}
+                  onClick={() => setShowArchived(true)}
+                >
+                  Archived projects
+                </button>
+              </div>
               {refreshing ? (
                 <div className="empty-state">
                   <LoaderCircle className="spin" />
@@ -397,6 +416,9 @@ export default function App() {
                         </span>
                         <span className="role-pill">{item.role}</span>
                       </div>
+                      {item.archived_at && (
+                        <span className="role-pill">Archived · evidence retained</span>
+                      )}
                       <span className="card-domain">{item.domain}</span>
                       <h3>{item.name}</h3>
                       <p>

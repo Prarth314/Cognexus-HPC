@@ -2125,3 +2125,32 @@ td select {
     gap: 5px;
   }
 }
+.project-filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.project-filters button {
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 10px;
+  color: #7e9073;
+}
+.project-filters button.selected {
+  background: #e8f0de;
+  color: #47713d;
+  border-color: #c8dabb;
+}
+.archive-action {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 22px;
+  flex-wrap: wrap;
+}
+.archive-action small {
+  font-size: 9px;
+  color: #899a7b;
+}

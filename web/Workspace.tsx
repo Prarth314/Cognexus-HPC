@@ -1,6 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import {
   Activity,
+  Archive,
+  ArchiveRestore,
   ArrowDownToLine,
   ArrowRight,
   ArrowUpRight,
@@ -96,7 +98,22 @@ export function Workspace({
     [inviteToken, setInviteToken] = useState('');
   const [defaults, setDefaults] = useState<RunRequest | undefined>();
   const [query, setQuery] = useState('');
-  const canWrite = project.role !== 'viewer';
+  const canWrite = project.role !== 'viewer' && !project.archived_at;
+  async function archive() {
+    setBusy(true);
+    try {
+      await api(`/projects/${project.id}/archive`, {
+        method: 'POST',
+        body: json({ archived: !project.archived_at }),
+      });
+      await onRefresh();
+      await refresh();
+    } catch (error) {
+      onError((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   async function refresh() {
     const [nextRuns, nextFiles, nextMembers, nextEvents] = await Promise.all([
       api<Run[]>(`/projects/${project.id}/runs`),
@@ -255,6 +272,30 @@ export function Workspace({
           Local CPU worker
         </span>
       </div>
+      {project.archived_at && (
+        <div className="notice">
+          <Archive size={17} />
+          <span>
+            This project is archived. Recorded evidence remains available. Restore it to upload
+            inputs, run experiments, or request new analysis.
+          </span>
+        </div>
+      )}
+      {project.role === 'owner' && (
+        <div className="archive-action">
+          <button
+            className="button secondary small-button"
+            disabled={busy}
+            onClick={() => void archive()}
+          >
+            {project.archived_at ? <ArchiveRestore size={14} /> : <Archive size={14} />}{' '}
+            {project.archived_at ? 'Restore project' : 'Archive project'}
+          </button>
+          <small>
+            Reversible. Existing files, results, permissions, and audit history are retained.
+          </small>
+        </div>
+      )}
       <div className="project-summary">
         <div>
           <span>Total experiments</span>
@@ -503,7 +544,7 @@ export function Workspace({
                   <h2>Connected minds</h2>
                   <p>Explicit access for everyone in the room.</p>
                 </div>
-                {project.role === 'owner' && (
+                {project.role === 'owner' && !project.archived_at && (
                   <button
                     className="button primary"
                     onClick={() => {

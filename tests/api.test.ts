@@ -463,6 +463,139 @@ test('expired invitations cannot create membership', async () => {
   });
   assert.equal(accepted.statusCode, 404);
 });
+test('project archiving requires an owner and refuses active jobs', async () => {
+  const url = `/api/projects/${projectId}/archive`;
+  assert.equal(
+    (
+      await service.app.inject({
+        method: 'POST',
+        url,
+        headers: headers(viewerCookie),
+        payload: { archived: true },
+      })
+    ).statusCode,
+    403,
+  );
+  assert.equal(
+    (
+      await service.app.inject({
+        method: 'POST',
+        url,
+        headers: headers(outsiderCookie),
+        payload: { archived: true },
+      })
+    ).statusCode,
+    404,
+  );
+  const id = await submitReference('archive-active-run');
+  assert.equal(
+    (
+      await service.app.inject({
+        method: 'POST',
+        url,
+        headers: headers(ownerCookie),
+        payload: { archived: true },
+      })
+    ).statusCode,
+    409,
+  );
+  await service.app.inject({
+    method: 'POST',
+    url: `/api/runs/${id}/cancel`,
+    headers: headers(ownerCookie),
+  });
+});
+test('archiving retains evidence, blocks new research, and can be restored', async () => {
+  const url = `/api/projects/${projectId}/archive`;
+  assert.equal(
+    (
+      await service.app.inject({
+        method: 'POST',
+        url,
+        headers: headers(ownerCookie),
+        payload: { archived: true },
+      })
+    ).statusCode,
+    200,
+  );
+  const list = (
+    await service.app.inject({ url: '/api/projects', headers: headers(ownerCookie) })
+  ).json();
+  assert.ok(list.find((p: { id: string }) => p.id === projectId).archived_at);
+  assert.equal(
+    (
+      await service.app.inject({
+        url: `/api/files/${fileId}/download`,
+        headers: headers(viewerCookie),
+      })
+    ).statusCode,
+    200,
+  );
+  assert.equal(
+    (
+      await service.app.inject({
+        url: `/api/runs/${runId}/manifest`,
+        headers: headers(ownerCookie),
+      })
+    ).statusCode,
+    200,
+  );
+  for (const item of [
+    { url: `/api/projects/${projectId}/files`, payload: {} },
+    {
+      url: `/api/projects/${projectId}/runs`,
+      payload: { workflow: 'monte-carlo-pi', parameters: { samples: 1000, seed: 1 } },
+    },
+    {
+      url: `/api/projects/${projectId}/invitations`,
+      payload: { email: 'archived@example.org', role: 'viewer' },
+    },
+  ]) {
+    const response = await service.app.inject({
+      method: 'POST',
+      url: item.url,
+      headers: { ...headers(ownerCookie), 'idempotency-key': 'archived-write-test' },
+      payload: item.payload,
+    });
+    assert.equal(response.statusCode, 409, response.body);
+  }
+  assert.equal(
+    (
+      await service.app.inject({
+        method: 'PATCH',
+        url: `/api/projects/${projectId}`,
+        headers: headers(ownerCookie),
+        payload: { name: 'Archived change' },
+      })
+    ).statusCode,
+    409,
+  );
+  assert.equal(
+    (
+      await service.app.inject({
+        method: 'POST',
+        url,
+        headers: headers(ownerCookie),
+        payload: { archived: false },
+      })
+    ).statusCode,
+    200,
+  );
+  const id = await submitReference('restored-run-test');
+  await service.app.inject({
+    method: 'POST',
+    url: `/api/runs/${id}/cancel`,
+    headers: headers(ownerCookie),
+  });
+  const events = (
+    await service.app.inject({
+      url: `/api/projects/${projectId}/audit`,
+      headers: headers(ownerCookie),
+    })
+  ).json() as { action: string }[];
+  assert.ok(events.some((event) => event.action === 'project.archived'));
+  assert.ok(events.some((event) => event.action === 'project.restored'));
+});
 test('revocation immediately blocks existing sessions from project resources', async () => {
   const list = await service.app.inject({
     url: `/api/projects/${projectId}/members`,
