@@ -28,6 +28,7 @@ import { createRunner } from './runner.js';
 import { HttpError, fail } from './errors.js';
 import { registerAccountRoutes } from './account.js';
 import { registerOperations } from './operations.js';
+import { explainResult } from './explanation.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -233,7 +234,7 @@ export async function buildApp(
   app.get('/api/session', async (request) => ({
     user: request.principal,
     registrationRestricted: !!config.signupCode,
-    aiEnabled: !!(config.aiKey && config.aiModel),
+    aiEnabled: !!(config.allowExternalAi && config.aiKey && config.aiModel),
     execution: 'local-cpu',
   }));
   app.post(
@@ -735,12 +736,23 @@ export async function buildApp(
       [run.id],
     );
   });
+  app.get('/api/runs/:runId/evidence-report', async (request) => {
+    const run = await authorizedRun(request);
+    if (run.status !== 'succeeded' || !run.result)
+      fail(409, 'A completed run is required for an evidence report');
+    return explainResult(run.id, run.workflow, run.result);
+  });
   app.post(
     '/api/runs/:runId/analyses',
     { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
     async (request) => {
       const run = await authorizedRun(request, true),
         body = z.object({ question: z.string().trim().min(3).max(2000) }).parse(request.body);
+      if (!config.allowExternalAi)
+        fail(
+          503,
+          'External AI is disabled by the free-development default. The built-in evidence report requires no provider or API key.',
+        );
       if (!config.aiKey || !config.aiModel)
         fail(
           503,

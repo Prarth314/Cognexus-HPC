@@ -15,6 +15,7 @@ services:
       SIGNUP_CODE: ${SIGNUP_CODE:?Set a random SIGNUP_CODE of at least 24 characters}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-}
+      ALLOW_EXTERNAL_AI: 'false'
       OPERATIONS_TOKEN: ${OPERATIONS_TOKEN:-}
       DATA_DIR: /app/data
     volumes:

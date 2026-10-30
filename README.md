@@ -43,6 +43,8 @@ Research should leave an inspectable trail. Cognexus connects a project's people
 
 ## Start exploring
 
+**Development stays free.** No cloud account, payment details, AI key, or subscription is required. External AI is disabled by default; built-in evidence reports work locally. See the [free development policy](docs/FREE_DEVELOPMENT.md).
+
 **Node.js 22.15+ · npm**
 
 ```sh

@@ -1028,6 +1028,24 @@ function RunDetail({
   const [analyses, setAnalyses] = useState<Analysis[]>([]),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
+  const [evidenceReport, setEvidenceReport] = useState<{ text: string; version: string } | null>(
+    null,
+  );
+  useEffect(() => {
+    let active = true;
+    setEvidenceReport(null);
+    if (run.status === 'succeeded')
+      void api<{ text: string; version: string }>(`/runs/${run.id}/evidence-report`)
+        .then((value) => {
+          if (active) setEvidenceReport(value);
+        })
+        .catch((error) => {
+          if (active) setError(error.message);
+        });
+    return () => {
+      active = false;
+    };
+  }, [run.id, run.status]);
   useEffect(() => {
     let active = true;
     void api<Analysis[]>(`/runs/${run.id}/analyses`)
@@ -1126,6 +1144,24 @@ function RunDetail({
             </span>
           </div>
         </>
+      )}
+      {evidenceReport && (
+        <section className="account-panel">
+          <h3>
+            <FileCheck2 size={17} />
+            Built-in evidence report
+          </h3>
+          <p className="form-hint">
+            Free, deterministic explanation of recorded measurements. No AI or external service is
+            used.
+          </p>
+          <p style={{ whiteSpace: 'pre-wrap', fontSize: 12, lineHeight: 1.8 }}>
+            {evidenceReport.text}
+          </p>
+          <small className="form-hint">
+            {evidenceReport.version} · Run {run.id.slice(0, 8)}
+          </small>
+        </section>
       )}
       <div className="detail-columns">
         <section>

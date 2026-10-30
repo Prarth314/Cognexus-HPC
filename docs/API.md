@@ -67,4 +67,8 @@ Submission pins input metadata/checksum and execution configuration. The worker 
 
 ## Preview and AI data boundaries
 
+`GET /runs/:id/evidence-report` returns a free, deterministic explanation of a completed run's recorded measurements. It enforces current project membership and includes a report version, exact evidence, and `usesAi:false`. It makes no external request and does not answer arbitrary scientific questions.
+
+External `/analyses` requests are disabled unless deliberately enabled outside the default free-development profile. Merely setting provider credentials does not enable them.
+
 Text previews are limited to 64,000 bytes. CSV previews return the header and up to 20 data rows. Unsupported types require download. AI receives the question, parameters, calculated result, artifact names/checksums, and run identifier; no raw upload bytes are sent by this release. AI answers can be wrong and must be reviewed against their saved evidence.

@@ -23,6 +23,7 @@ flowchart LR
 - Result completion is guarded by job status and attempt number. Artifacts are registered transactionally; cancellation cannot be overwritten by late completion. Input integrity is checked before execution.
 - Successful execution, output validation, and domain validity are distinct. `validation_status=valid` means the reference output contract passed; it does not certify scientific claims.
 - Analysis records retain question, answer, model, prompt version, and exact evidence snapshot. A model response is not automatically verified and must be reviewed.
+- Free deterministic evidence reports explain only recorded measurements, preserve field references, and never call an external service. External AI requires an explicit opt-in in addition to credentials and is disabled in the default free development/Compose profiles.
 
 ## Deployment topology
 

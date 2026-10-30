@@ -303,6 +303,22 @@ test('worker executes stored input, persists an artifact, and exports evidence',
     );
 });
 test('AI is optional and fails explicitly without provider configuration', async () => {
+  const report = await service.app.inject({
+    url: `/api/runs/${runId}/evidence-report`,
+    headers: headers(ownerCookie),
+  });
+  assert.equal(report.statusCode, 200, report.body);
+  assert.equal(report.json().usesAi, false);
+  assert.match(report.json().text, /2.5/);
+  assert.equal(
+    (
+      await service.app.inject({
+        url: `/api/runs/${runId}/evidence-report`,
+        headers: headers(outsiderCookie),
+      })
+    ).statusCode,
+    404,
+  );
   const response = await service.app.inject({
     method: 'POST',
     url: `/api/runs/${runId}/analyses`,

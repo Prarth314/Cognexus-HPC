@@ -32,6 +32,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
     signupCode: env.SIGNUP_CODE,
     aiKey: env.GEMINI_API_KEY,
     aiModel: env.GEMINI_MODEL,
+    allowExternalAi: env.ALLOW_EXTERNAL_AI === 'true',
     operationsToken: env.OPERATIONS_TOKEN,
     s3: env.S3_BUCKET
       ? {

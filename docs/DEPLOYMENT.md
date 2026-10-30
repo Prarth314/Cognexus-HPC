@@ -56,7 +56,9 @@ Keep one app replica until distributed rate limits and cluster-wide execution co
 
 ## Optional AI
 
-Set GEMINI_API_KEY and GEMINI_MODEL on the server. Choose a model available to your account. No provider key is sent to browsers. Users explicitly request an explanation; the provider receives their question, parameters, calculated result, artifact names/checksums, and run identifier. Choose data policies appropriate to your research before enabling it. AI does not receive raw file bytes in this release and cannot submit jobs.
+The [free development profile](FREE_DEVELOPMENT.md) keeps external AI disabled. Built-in deterministic evidence reports require no model, key, or external request. GEMINI_API_KEY/GEMINI_MODEL alone do not enable network calls; ALLOW_EXTERNAL_AI defaults to false and the tracked Compose profile fixes it to false. Do not enable external billable services under the current requirement.
+
+The optional provider integration remains isolated server-side for a future explicitly authorized configuration change. If enabled later, it would send the question, parameters, calculated result, artifact names/checksums, and run identifier to the provider. It does not receive raw file bytes and cannot submit jobs. No provider has been enabled or validated in this session.
 
 ## Account operations
 
