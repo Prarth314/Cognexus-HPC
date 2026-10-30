@@ -2,6 +2,8 @@
 
 All routes use `/api`. Authentication uses an HttpOnly cookie. State-changing requests require `X-Cognexus-Request: 1`; browser Origin must match PUBLIC_ORIGIN. JSON requests use `Content-Type: application/json`. No bearer token is exposed to the browser.
 
+The operator-only `/metrics` endpoint is an exception to browser cookie authentication: when configured it requires the server's operations bearer token. `/ready` reports database connectivity and worker freshness. See [operational endpoints](OBSERVABILITY.md).
+
 Errors return `{ error, requestId? }`; validation errors include field details. Foreign project resources return 404. Insufficient roles return 403. Limits return 429. Lists are currently bounded, not paginated.
 
 | Method     | Route                           | Access / purpose                                                   |

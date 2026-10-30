@@ -65,6 +65,7 @@ Production registration requires the shared operator-issued access code. This is
 ## Health, logs, and recovery
 
 - `/api/health` checks database connectivity. It does not prove object-store availability, worker health, or cluster connectivity.
+- `/api/ready` also checks local worker polling freshness and is used by the production container. It does not probe storage. Configure private Prometheus metrics with `OPERATIONS_TOKEN`; see [observability](OBSERVABILITY.md).
 - Logs are structured JSON. Never add passwords, session tokens, provider keys, or raw research files to logs. Restrict log access and retention.
 - Worker leases expire after 90 seconds; unfinished pure local work retries up to three total attempts. External scheduler execution is not implemented.
 - Alert on repeated 5xx responses, failed jobs, old queued jobs, expired leases, storage errors, disk use, and backup failures. External alert delivery is an operator integration, not configured here.
@@ -84,4 +85,4 @@ Do not run `docker compose down -v` on a deployment with data to preserve. Migra
 
 ## Institutional launch gate
 
-Authorized compute integration and scheduler identity; domain-specific workflow validation; verified identity/recovery; data deletion/retention; orphan-object reconciliation; external monitoring/alerts; restore drill; load test; independent security review; pilot research users. These require infrastructure access and operational evidence outside the source repository.
+Authorized compute integration and scheduler identity; domain-specific workflow validation; verified identity; permanent data deletion/retention policy; scheduled and reviewed storage inspection; external monitoring/alerts; restore drill; load test; independent security review; pilot research users. Offline account recovery, reversible archiving, and read-only integrity inspection are implemented. The remaining gates require infrastructure access and operational evidence outside the source repository.

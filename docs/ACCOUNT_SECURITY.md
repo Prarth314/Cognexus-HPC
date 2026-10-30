@@ -2,6 +2,8 @@
 
 Open **Account and security** in the workspace header to edit your display name, change your password, inspect/revoke sessions, create offline recovery codes, download account metadata, or inspect recent security activity.
 
+![Account security interface with empty password fields](assets/account-security.jpg)
+
 ## Offline recovery
 
 1. Sign in and confirm your current password to generate eight random, single-use recovery codes.

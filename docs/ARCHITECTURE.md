@@ -30,7 +30,7 @@ Deploy one application replica initially. It serves frontend assets, API, and on
 
 ## Deliberate limits
 
-10 MiB/file; 250 MiB and 500 artifacts/project; three active runs/project; 100 runs/project/24 hours; two reference workloads; API list limits of 500 files, 200 runs, 100 audit events. Cursor pagination and configurable institutional quotas are future work. There is no Slurm submission, email delivery, verified identity, password recovery, cluster credential storage, or automatic monetary billing in this release.
+10 MiB/file; 250 MiB and 500 artifacts/project; three active runs/project; 100 runs/project/24 hours; two reference workloads; API list limits of 500 files, 200 runs, 100 audit events. Cursor pagination and configurable institutional quotas are future work. Offline recovery codes and session management are implemented. There is no Slurm submission, email delivery/verification, email-based recovery, cluster credential storage, or automatic monetary billing in this release.
 
 ## Important remaining failure windows
 
