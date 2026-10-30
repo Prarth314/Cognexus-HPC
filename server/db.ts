@@ -10,36 +10,59 @@ export interface Database {
   close(): Promise<void>;
 }
 
-export async function openDatabase(config: Pick<Config, 'databaseUrl' | 'dataDir'>, memory = false): Promise<Database> {
+export async function openDatabase(
+  config: Pick<Config, 'databaseUrl' | 'dataDir'>,
+  memory = false,
+): Promise<Database> {
   if (config.databaseUrl) {
     const pool = new pg.Pool({ connectionString: config.databaseUrl, max: 10 });
     const wrap = (client: pg.Pool | pg.PoolClient): Database => ({
-      async query<T>(sql: string, params: unknown[] = []) { return (await client.query(sql, params)).rows as T[]; },
+      async query<T>(sql: string, params: unknown[] = []) {
+        return (await client.query(sql, params)).rows as T[];
+      },
       async transaction<T>(fn: (db: Database) => Promise<T>) {
         const connection = await pool.connect();
-        try { await connection.query('BEGIN'); const result = await fn(wrap(connection)); await connection.query('COMMIT'); return result; }
-        catch (e) { await connection.query('ROLLBACK'); throw e; }
-        finally { connection.release(); }
+        try {
+          await connection.query('BEGIN');
+          const result = await fn(wrap(connection));
+          await connection.query('COMMIT');
+          return result;
+        } catch (e) {
+          await connection.query('ROLLBACK');
+          throw e;
+        } finally {
+          connection.release();
+        }
       },
-      async close() { await pool.end(); },
+      async close() {
+        await pool.end();
+      },
     });
     return wrap(pool);
   }
   if (!memory) await mkdir(config.dataDir, { recursive: true });
   const embedded = new PGlite(memory ? undefined : path.join(config.dataDir, 'db'));
   const wrap = (client: Pick<PGlite, 'query'>): Database => ({
-    async query<T>(sql: string, params: unknown[] = []) { return (await client.query<T>(sql, params)).rows; },
-    async transaction<T>(fn: (db: Database) => Promise<T>) { return embedded.transaction(tx => fn(wrap(tx as unknown as PGlite))); },
-    async close() { await embedded.close(); },
+    async query<T>(sql: string, params: unknown[] = []) {
+      return (await client.query<T>(sql, params)).rows;
+    },
+    async transaction<T>(fn: (db: Database) => Promise<T>) {
+      return embedded.transaction((tx) => fn(wrap(tx as unknown as PGlite)));
+    },
+    async close() {
+      await embedded.close();
+    },
   });
   return wrap(embedded);
 }
 
 export async function migrate(db: Database) {
-  await db.transaction(async tx => {
+  await db.transaction(async (tx) => {
     // The transaction-scoped lock serializes migrations across PostgreSQL replicas.
     await tx.query('SELECT pg_advisory_xact_lock(736281)');
-    await tx.query('CREATE TABLE IF NOT EXISTS schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())');
+    await tx.query(
+      'CREATE TABLE IF NOT EXISTS schema_migrations (version integer PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())',
+    );
     const applied = await tx.query('SELECT version FROM schema_migrations WHERE version=1');
     if (applied.length) return;
     const statements = [

@@ -1,0 +1,7 @@
+node_modules
+dist
+dist-server
+.data
+package-lock.json
+docs/assets
+coverage

@@ -26,11 +26,11 @@ Research should leave an inspectable trail. Cognexus connects a project's people
 
 ## A workspace for the full experiment
 
-| Workspace | Execution | Evidence |
-| --- | --- | --- |
-| Private projects and explicit roles | Validated workload templates | Versioned inputs and checksums |
-| Durable uploads and authorized downloads | Persistent queues and cancellation | Immutable execution manifests |
-| Invitations and audit history | Real bounded execution | Run comparison and grounded explanations |
+| Workspace                                | Execution                          | Evidence                                 |
+| ---------------------------------------- | ---------------------------------- | ---------------------------------------- |
+| Private projects and explicit roles      | Validated workload templates       | Versioned inputs and checksums           |
+| Durable uploads and authorized downloads | Persistent queues and cancellation | Immutable execution manifests            |
+| Invitations and audit history            | Real bounded execution             | Run comparison and grounded explanations |
 
 ### Ask a question. Keep the evidence.
 
@@ -60,10 +60,10 @@ For configuration, copy `.env.example` to `.env` (`Copy-Item .env.example .env` 
 
 ## Real reference workflows
 
-| Workflow | Input | Recorded outputs |
-| --- | --- | --- |
+| Workflow           | Input                                    | Recorded outputs                                                      |
+| ------------------ | ---------------------------------------- | --------------------------------------------------------------------- |
 | Dataset statistics | CSV + numeric column, up to 100,000 rows | Count, missing values, mean, median, range, sample standard deviation |
-| Seeded Monte Carlo | Seed + 1,000–2,000,000 samples | Estimate of π, inside count, reference value, absolute error |
+| Seeded Monte Carlo | Seed + 1,000–2,000,000 samples           | Estimate of π, inside count, reference value, absolute error          |
 
 Try [`examples/observations.csv`](examples/observations.csv) with column `value`: mean **2.5**, median **2.5**, **4** numeric observations and **1** missing value. These are bounded reference workflows; output-contract validation does not certify scientific validity.
 
@@ -91,10 +91,14 @@ Read the [architecture and tradeoffs](docs/ARCHITECTURE.md), [API reference](doc
 npm run check
 npm test
 npm run build
+npm run smoke
+npm run format:check
 npm audit --audit-level=moderate
 ```
 
 Tests cover reference calculations, deterministic execution, authorization, invitations, sessions, integrity, idempotency, quotas, cancellation, and lease recovery. CI runs the API suite against embedded PostgreSQL and PostgreSQL 17, and verifies the container build. See each run's status rather than assuming an unexecuted CI workflow has passed.
+
+The compiled HTTP smoke test starts the built server in an isolated temporary directory and exercises assets, registration, project creation, actual computation, and the artifact manifest. On restricted Windows sandboxes, persistent PGlite initialization may require running this check in a normal local shell.
 
 ## Deploy deliberately
 
@@ -103,6 +107,8 @@ The repository includes a non-root multi-stage Docker image and a single-server 
 **Current boundaries:** one application replica, 10 MiB uploads, 250 MiB / 500 artifacts per project, three active jobs per project, 100 jobs per project per 24 hours. No arbitrary code execution, Slurm submission, password recovery, verified email, or monetary billing is implemented. S3 and live AI require separately configured and tested accounts.
 
 [Deployment & recovery guide →](docs/DEPLOYMENT.md)
+
+**No cluster access yet?** Follow the [HPC pilot and access guide](docs/HPC_ACCESS.md) to prepare a sponsor-backed request and an administrator-approved integration. Local execution remains useful while access is being established.
 
 ## Work with us
 
