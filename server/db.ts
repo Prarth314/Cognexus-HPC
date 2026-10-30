@@ -15,7 +15,13 @@ export async function openDatabase(
   memory = false,
 ): Promise<Database> {
   if (config.databaseUrl) {
-    const pool = new pg.Pool({ connectionString: config.databaseUrl, max: 10 });
+    const pool = new pg.Pool({
+      connectionString: config.databaseUrl,
+      max: 10,
+      connectionTimeoutMillis: 5000,
+      statement_timeout: 10000,
+      idleTimeoutMillis: 30000,
+    });
     const wrap = (client: pg.Pool | pg.PoolClient): Database => ({
       async query<T>(sql: string, params: unknown[] = []) {
         return (await client.query(sql, params)).rows as T[];

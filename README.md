@@ -43,13 +43,13 @@ Research should leave an inspectable trail. Cognexus connects a project's people
 
 ## Start exploring
 
+**Development stays free.** No cloud account, payment details, AI key, or subscription is required. External AI is disabled by default; built-in evidence reports work locally. See the [free development policy](docs/FREE_DEVELOPMENT.md).
+
 **Node.js 22.15+ · npm**
 
 ```sh
 git clone https://github.com/Prarth314/Cognexus-HPC.git
 cd Cognexus-HPC
-# Until the production-platform PR is merged:
-git switch codex/production-platform
 npm ci
 npm run dev
 ```
@@ -84,6 +84,10 @@ flowchart LR
 **React + TypeScript** · **Fastify** · **PostgreSQL / PGlite for development** · **Private disk / S3 adapter** · **Node worker threads**
 
 Read the [architecture and tradeoffs](docs/ARCHITECTURE.md), [API reference](docs/API.md), and [capability checklist](docs/CAPABILITIES.md).
+
+[Worker-aware readiness and private metrics](docs/OBSERVABILITY.md) provide operational visibility without exposing credentials or raw research identifiers in metric labels.
+
+Projects support [reversible archiving](docs/PROJECT_LIFECYCLE.md) with retained evidence. Operators can use the [read-only storage inspector](docs/STORAGE_OPERATIONS.md) to identify integrity failures and orphan candidates.
 
 ## Verification
 

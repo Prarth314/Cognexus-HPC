@@ -34,7 +34,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
       - run: npm ci
       - run: npm run check
       - run: npm run format:check
@@ -45,14 +44,6 @@ jobs:
       - run: npm run smoke
         if: matrix.database == 'embedded'
       - run: npm audit --audit-level=moderate
-      - uses: actions/upload-artifact@v4
-        if: matrix.database == 'embedded'
-        with:
-          name: application-build
-          path: |
-            dist/
-            dist-server/
-          retention-days: 7
   container:
     name: Verify production container builds
     runs-on: ubuntu-latest

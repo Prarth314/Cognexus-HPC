@@ -23,6 +23,7 @@ flowchart LR
 - Result completion is guarded by job status and attempt number. Artifacts are registered transactionally; cancellation cannot be overwritten by late completion. Input integrity is checked before execution.
 - Successful execution, output validation, and domain validity are distinct. `validation_status=valid` means the reference output contract passed; it does not certify scientific claims.
 - Analysis records retain question, answer, model, prompt version, and exact evidence snapshot. A model response is not automatically verified and must be reviewed.
+- Free deterministic evidence reports explain only recorded measurements, preserve field references, and never call an external service. External AI requires an explicit opt-in in addition to credentials and is disabled in the default free development/Compose profiles.
 
 ## Deployment topology
 
@@ -30,10 +31,10 @@ Deploy one application replica initially. It serves frontend assets, API, and on
 
 ## Deliberate limits
 
-10 MiB/file; 250 MiB and 500 artifacts/project; three active runs/project; 100 runs/project/24 hours; two reference workloads; API list limits of 500 files, 200 runs, 100 audit events. Cursor pagination and configurable institutional quotas are future work. There is no Slurm submission, email delivery, verified identity, password recovery, cluster credential storage, or automatic monetary billing in this release.
+10 MiB/file; 250 MiB and 500 artifacts/project; three active runs/project; 100 runs/project/24 hours; two reference workloads; API list limits of 500 files, 200 runs, 100 audit events. Cursor pagination and configurable institutional quotas are future work. Offline recovery codes and session management are implemented. There is no Slurm submission, email delivery/verification, email-based recovery, cluster credential storage, or automatic monetary billing in this release.
 
 ## Important remaining failure windows
 
-Storage and PostgreSQL cannot commit atomically. A hard process crash between object creation and metadata registration may leave an orphaned object. Cleanup is best effort during normal operation. Schedule inventory reconciliation before sustained production ingestion. Back up database and artifacts together; see the deployment runbook.
+Storage and PostgreSQL cannot commit atomically. A hard process crash between object creation and metadata registration may leave an orphaned object. Cleanup is best effort during normal operation. The read-only [storage inspector](STORAGE_OPERATIONS.md) detects orphan candidates, missing bytes, and integrity failures; schedule and validate it before sustained production ingestion. Back up database and artifacts together; see the deployment runbook.
 
 Local pure execution can be repeated after a worker crash; external compute must use a separate adapter with submission reconciliation. Do not reuse this retry strategy for Slurm or any expensive side-effectful operation.
