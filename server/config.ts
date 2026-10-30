@@ -16,6 +16,8 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
     );
   }
   if (env.S3_BUCKET && !env.S3_REGION) throw new Error('S3_REGION is required with S3_BUCKET.');
+  if (env.OPERATIONS_TOKEN && env.OPERATIONS_TOKEN.length < 32)
+    throw new Error('OPERATIONS_TOKEN must have at least 32 characters');
   return {
     production,
     origin: origin.origin,
@@ -30,6 +32,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
     signupCode: env.SIGNUP_CODE,
     aiKey: env.GEMINI_API_KEY,
     aiModel: env.GEMINI_MODEL,
+    operationsToken: env.OPERATIONS_TOKEN,
     s3: env.S3_BUCKET
       ? {
           bucket: env.S3_BUCKET,

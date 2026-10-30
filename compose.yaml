@@ -15,6 +15,7 @@ services:
       SIGNUP_CODE: ${SIGNUP_CODE:?Set a random SIGNUP_CODE of at least 24 characters}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODEL: ${GEMINI_MODEL:-}
+      OPERATIONS_TOKEN: ${OPERATIONS_TOKEN:-}
       DATA_DIR: /app/data
     volumes:
       - artifacts:/app/data
@@ -22,6 +23,7 @@ services:
       database:
         condition: service_healthy
     mem_limit: 1g
+    stop_grace_period: 60s
     cpus: 2
     security_opt:
       - no-new-privileges:true

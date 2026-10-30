@@ -27,6 +27,7 @@ import { digest, hashPassword, verifyPassword, safeEqual, token } from './securi
 import { createRunner } from './runner.js';
 import { HttpError, fail } from './errors.js';
 import { registerAccountRoutes } from './account.js';
+import { registerOperations } from './operations.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -68,7 +69,15 @@ export async function buildApp(
   await migrate(db);
   const storage = options.storage || createStorage(config);
   const app = Fastify({
-    logger: options.logger ?? true,
+    logger:
+      options.logger === false
+        ? false
+        : {
+            redact: {
+              paths: ['req.headers.cookie', 'req.headers.authorization'],
+              censor: '[REDACTED]',
+            },
+          },
     bodyLimit: 64 * 1024,
     requestTimeout: 40_000,
     connectionTimeout: 10_000,
@@ -109,6 +118,7 @@ export async function buildApp(
     options.worker === false
       ? undefined
       : createRunner(db, storage, { error: (e) => app.log.error(e) });
+  registerOperations(app, { db, config, workerState: () => runner?.state() });
   app.addHook('onClose', async () => {
     await runner?.stop();
     await db.close();

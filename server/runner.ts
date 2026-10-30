@@ -57,6 +57,7 @@ export function createRunner(
     busy = false;
   let active: { id: string; abort: AbortController } | undefined;
   let inFlight: Promise<void> | undefined;
+  let lastPollAt: number | null = null;
 
   async function tick() {
     if (stopped || busy) return;
@@ -79,6 +80,7 @@ export function createRunner(
         );
         return updated;
       });
+      lastPollAt = Date.now();
       if (!claimed) return;
       const job = claimed;
       active = { id: job.id, abort: new AbortController() };
@@ -174,6 +176,9 @@ export function createRunner(
   }, 1000);
   timer.unref();
   return {
+    state() {
+      return { enabled: !stopped, busy, lastPollAt };
+    },
     tick() {
       if (!busy && !stopped) inFlight = tick();
       return inFlight || Promise.resolve();
