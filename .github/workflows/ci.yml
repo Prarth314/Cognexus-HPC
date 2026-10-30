@@ -45,7 +45,7 @@ jobs:
       - run: npm run smoke
         if: matrix.database == 'embedded'
       - run: npm audit --audit-level=moderate
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: matrix.database == 'embedded'
         with:
           name: application-build
