@@ -2,7 +2,7 @@
 
 | Capability         | Implementation                                                                  | Verification / remaining gate                                                                |
 | ------------------ | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Accounts           | Salted scrypt passwords; opaque database sessions; Secure cookies in production | API tests; verified identity and account recovery pending                                    |
+| Accounts           | Salted scrypt passwords; opaque database sessions; Secure cookies in production | Session/recovery/race/upgrade tests; verified identity remains pending                       |
 | Projects and roles | Owner / collaborator / viewer, protected final owner                            | Isolation and revocation tests                                                               |
 | Invitations        | Email-bound, single-use, 48-hour expiry                                         | Binding/replay/expiry tests; manual private delivery only                                    |
 | Files              | Immutable uploads, private downloads, SHA-256 integrity                         | Upload/download/preview/corruption tests; live S3 test pending                               |

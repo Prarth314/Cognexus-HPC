@@ -21,6 +21,7 @@ import type { Project, User } from '../shared/contracts';
 import { api, json } from './api';
 import { Dialog } from './Dialog';
 import { Workspace } from './Workspace';
+import { Account, RecoverAccount } from './Account';
 import './styles.css';
 
 type Session = {
@@ -51,6 +52,7 @@ export default function App() {
   const [query, setQuery] = useState('');
   const [creating, setCreating] = useState(false);
   const [joining, setJoining] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
   const [working, setWorking] = useState(false);
   const [refreshing, setRefreshing] = useState(true);
   async function reload() {
@@ -229,6 +231,13 @@ export default function App() {
             <strong>{project?.name || 'Overview'}</strong>
           </div>
           <div className="topbar-right">
+            <button
+              className="icon-button"
+              aria-label="Account and security"
+              onClick={() => setAccountOpen(true)}
+            >
+              <ShieldCheck size={18} />
+            </button>
             <button
               className="mobile-join icon-button"
               aria-label="Accept invitation"
@@ -427,6 +436,18 @@ export default function App() {
           )}
         </main>
       </div>
+      {accountOpen && (
+        <Account
+          user={session.user}
+          onUser={(user) => setSession({ ...session, user })}
+          onClose={() => setAccountOpen(false)}
+          onSessionEnded={() => {
+            setSession({ ...session, user: null });
+            setProjects([]);
+            setSelected(null);
+          }}
+        />
+      )}
       {creating && (
         <Dialog title="A new space for discovery" onClose={() => setCreating(false)}>
           <form onSubmit={createProject} className="form-stack">
@@ -497,6 +518,7 @@ export default function App() {
 }
 
 function Auth({ session, onSession }: { session: Session; onSession: (user: User) => void }) {
+  const [recovering, setRecovering] = useState(false);
   const [register, setRegister] = useState(false),
     [error, setError] = useState(''),
     [working, setWorking] = useState(false);
@@ -591,8 +613,8 @@ function Auth({ session, onSession }: { session: Session; onSession: (user: User
             </label>
             {register && (
               <p className="form-hint">
-                Use at least 12 characters. This preview uses operator-managed accounts; password
-                recovery is not yet available.
+                Use at least 12 characters. After signing in, save offline recovery codes in Account
+                & security.
               </p>
             )}
             {register && session.registrationRestricted && (
@@ -617,6 +639,11 @@ function Auth({ session, onSession }: { session: Session; onSession: (user: User
               )}
             </button>
           </form>
+          {!register && (
+            <p className="auth-switch">
+              <button onClick={() => setRecovering(true)}>Recover with a saved code</button>
+            </p>
+          )}
           <p className="auth-switch">
             {register ? 'Already have an account?' : 'New to Cognexus?'}{' '}
             <button
@@ -634,6 +661,7 @@ function Auth({ session, onSession }: { session: Session; onSession: (user: User
           </div>
         </div>
       </section>
+      {recovering && <RecoverAccount onClose={() => setRecovering(false)} />}
     </main>
   );
 }

@@ -22,7 +22,7 @@ Research should leave an inspectable trail. Cognexus connects a project's people
 
 ![Cognexus research workspace](docs/assets/workspace.jpg)
 
-**Status: working research preview.** Real local CPU execution, durable projects, private files, and project permissions replace the original simulated prototype. This is a deployable foundation for a restricted pilot; institutional HPC integration, verified identity/recovery, independent security review, operational recovery drills, and domain validation remain release gates. No institutional deployment or performance scale is claimed.
+**Status: working research preview.** Real local CPU execution, durable projects, private files, and project permissions replace the original simulated prototype. This is a deployable foundation for a restricted pilot; institutional HPC integration, verified identity, independent security review, operational recovery drills, and domain validation remain release gates. No institutional deployment or performance scale is claimed.
 
 ## A workspace for the full experiment
 
@@ -104,7 +104,7 @@ The compiled HTTP smoke test starts the built server in an isolated temporary di
 
 The repository includes a non-root multi-stage Docker image and a single-server PostgreSQL Compose topology. Production startup requires an HTTPS public origin, PostgreSQL, and a strong operator-issued registration code. An external TLS proxy, backups, and monitoring must be provisioned by the operator.
 
-**Current boundaries:** one application replica, 10 MiB uploads, 250 MiB / 500 artifacts per project, three active jobs per project, 100 jobs per project per 24 hours. No arbitrary code execution, Slurm submission, password recovery, verified email, or monetary billing is implemented. S3 and live AI require separately configured and tested accounts.
+**Current boundaries:** one application replica, 10 MiB uploads, 250 MiB / 500 artifacts per project, three active jobs per project, 100 jobs per project per 24 hours. No arbitrary code execution, Slurm submission, verified email, or monetary billing is implemented. [Offline account recovery and session management](docs/ACCOUNT_SECURITY.md) are available; email-based recovery and institutional identity remain planned. S3 and live AI require separately configured and tested accounts.
 
 [Deployment & recovery guide →](docs/DEPLOYMENT.md)
 

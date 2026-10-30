@@ -60,7 +60,7 @@ Set GEMINI_API_KEY and GEMINI_MODEL on the server. Choose a model available to y
 
 ## Account operations
 
-Production registration requires the shared operator-issued access code. This is for a restricted pilot, not institutional verified identity. Invitations are private one-time codes bound to the registered account email; email ownership itself is not verified. Password recovery, email delivery, account deletion/export, and institutional SSO must be implemented before broader onboarding. Rotate the registration code if disclosed.
+Production registration requires the shared operator-issued access code. This is for a restricted pilot, not institutional verified identity. Invitations are private one-time codes bound to the registered account email; email ownership itself is not verified. Offline single-use recovery codes, password changes, session revocation, and account-metadata export are available in Account and security. See [account operations](ACCOUNT_SECURITY.md). Email delivery/verification, account deletion, and institutional SSO remain broader-onboarding requirements. Rotate the registration code if disclosed.
 
 ## Health, logs, and recovery
 

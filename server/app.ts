@@ -25,22 +25,13 @@ import { openDatabase, migrate, type Database } from './db.js';
 import { createStorage, type Storage } from './storage.js';
 import { digest, hashPassword, verifyPassword, safeEqual, token } from './security.js';
 import { createRunner } from './runner.js';
+import { HttpError, fail } from './errors.js';
+import { registerAccountRoutes } from './account.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
     principal: User | null;
   }
-}
-class HttpError extends Error {
-  constructor(
-    public statusCode: number,
-    message: string,
-  ) {
-    super(message);
-  }
-}
-function fail(status: number, message: string): never {
-  throw new HttpError(status, message);
 }
 const uuid = (value: unknown) => z.uuid().parse(value);
 const param = (request: FastifyRequest, key: string) =>
@@ -198,15 +189,18 @@ export async function buildApp(
       [randomUUID(), projectId, actor, action, JSON.stringify(details)],
     );
   }
-  async function session(reply: FastifyReply, principal: User) {
+  async function session(reply: FastifyReply, principal: User, connection = db) {
     const value = token();
-    await db.query('DELETE FROM sessions WHERE expires_at <= now()');
-    await db.query(
+    await connection.query('DELETE FROM sessions WHERE user_id=$1 AND expires_at <= now()', [
+      principal.id,
+    ]);
+    await connection.query(
       `INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '7 days')`,
       [digest(value), principal.id],
     );
     reply.setCookie(cookieName, value, cookieOptions);
   }
+  registerAccountRoutes(app, { db, cookieName, user, session });
   async function authorizedRun(request: FastifyRequest, write = false) {
     const id = param(request, 'runId');
     const [run] = await db.query<
@@ -259,14 +253,17 @@ export async function buildApp(
     { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
     async (request, reply) => {
       const body = loginSchema.parse(request.body);
-      const [account] = await db.query<User & { password_hash: string }>(
-        'SELECT id,name,email,password_hash FROM users WHERE email=$1',
-        [body.email],
-      );
-      const valid = await verifyPassword(body.password, account?.password_hash || dummyHash);
-      if (!account || !valid) fail(401, 'Email or password is incorrect');
-      const principal = { id: account.id, name: account.name, email: account.email };
-      await session(reply, principal);
+      const principal = await db.transaction(async (tx) => {
+        const [account] = await tx.query<User & { password_hash: string }>(
+          'SELECT id,name,email,password_hash FROM users WHERE email=$1 FOR UPDATE',
+          [body.email],
+        );
+        const valid = await verifyPassword(body.password, account?.password_hash || dummyHash);
+        if (!account || !valid) fail(401, 'Email or password is incorrect');
+        const principal = { id: account.id, name: account.name, email: account.email };
+        await session(reply, principal, tx);
+        return principal;
+      });
       return { user: principal };
     },
   );
