@@ -1,0 +1,48 @@
+services:
+  app:
+    build:
+      context: .
+      args:
+        APP_REVISION: ${APP_REVISION:-unrecorded}
+    init: true
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:3001:3001'
+    environment:
+      NODE_ENV: production
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Set PUBLIC_ORIGIN to the public HTTPS origin}
+      DATABASE_URL: postgresql://cognexus:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@database:5432/cognexus
+      SIGNUP_CODE: ${SIGNUP_CODE:?Set a random SIGNUP_CODE of at least 24 characters}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-}
+      DATA_DIR: /app/data
+    volumes:
+      - artifacts:/app/data
+    depends_on:
+      database:
+        condition: service_healthy
+    mem_limit: 1g
+    cpus: 2
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+  database:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cognexus
+      POSTGRES_DB: cognexus
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U cognexus -d cognexus']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    security_opt:
+      - no-new-privileges:true
+volumes:
+  postgres:
+  artifacts:
