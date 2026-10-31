@@ -3,19 +3,60 @@ import { z } from 'zod';
 
 export function readConfig(env: NodeJS.ProcessEnv = process.env) {
   const production = env.NODE_ENV === 'production';
-  const origin = new URL(env.PUBLIC_ORIGIN || 'http://localhost:3000');
+  function parseUrl(value: string, label: string) {
+    try {
+      return new URL(value);
+    } catch {
+      throw new Error(`${label} must be a valid URL`);
+    }
+  }
+  const origin = parseUrl(env.PUBLIC_ORIGIN || 'http://localhost:3000', 'PUBLIC_ORIGIN');
   if (
-    production &&
-    (origin.protocol !== 'https:' ||
-      !env.DATABASE_URL ||
-      !env.SIGNUP_CODE ||
-      env.SIGNUP_CODE.length < 24)
-  ) {
+    origin.username ||
+    origin.password ||
+    origin.pathname !== '/' ||
+    origin.search ||
+    origin.hash ||
+    !['http:', 'https:'].includes(origin.protocol)
+  )
+    throw new Error('PUBLIC_ORIGIN must be a bare HTTP(S) origin without credentials');
+  const dataDir = path.resolve(env.DATA_DIR || '.data');
+  const projectRelative = path.relative(dataDir, process.cwd());
+  if (
+    dataDir === path.parse(dataDir).root ||
+    !projectRelative ||
+    (!projectRelative.startsWith('..' + path.sep) &&
+      projectRelative !== '..' &&
+      !path.isAbsolute(projectRelative)) ||
+    ['dist', 'public'].some((folder) => {
+      const relative = path.relative(path.resolve(folder), dataDir);
+      return (
+        !relative ||
+        (!relative.startsWith('..' + path.sep) && relative !== '..' && !path.isAbsolute(relative))
+      );
+    })
+  )
+    throw new Error('DATA_DIR must be a private directory outside public/static roots');
+  if (production && (origin.protocol !== 'https:' || !env.DATABASE_URL)) {
     throw new Error(
-      'Production requires HTTPS PUBLIC_ORIGIN, DATABASE_URL, and SIGNUP_CODE of at least 24 characters.',
+      'Production requires HTTPS PUBLIC_ORIGIN and DATABASE_URL; registration uses email-bound operator enrollment.',
     );
   }
   if (env.S3_BUCKET && !env.S3_REGION) throw new Error('S3_REGION is required with S3_BUCKET.');
+  if (env.S3_ENDPOINT) {
+    const endpoint = parseUrl(env.S3_ENDPOINT, 'S3_ENDPOINT');
+    if (
+      endpoint.username ||
+      endpoint.password ||
+      endpoint.search ||
+      endpoint.hash ||
+      !['http:', 'https:'].includes(endpoint.protocol) ||
+      (production && endpoint.protocol !== 'https:')
+    )
+      throw new Error(
+        'S3_ENDPOINT must use HTTPS in production and contain no embedded credentials',
+      );
+  }
   if (env.OPERATIONS_TOKEN && env.OPERATIONS_TOKEN.length < 32)
     throw new Error('OPERATIONS_TOKEN must have at least 32 characters');
   return {
@@ -27,7 +68,7 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env) {
       .min(1)
       .max(65535)
       .parse(env.PORT || '3001'),
-    dataDir: path.resolve(env.DATA_DIR || '.data'),
+    dataDir,
     databaseUrl: env.DATABASE_URL,
     signupCode: env.SIGNUP_CODE,
     aiKey: env.GEMINI_API_KEY,

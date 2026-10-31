@@ -7,7 +7,7 @@ import type { Run } from '../shared/contracts.js';
 
 interface ClaimedRun extends Run {
   created_by: string;
-  input_snapshot: { sha256: string; storage_key: string } | null;
+  input_snapshot: { sha256: string; storage_key: string; bytes?: number } | null;
 }
 export async function runComputation(
   workflow: string,
@@ -95,7 +95,7 @@ export function createRunner(
       try {
         let input = '';
         if (job.input_snapshot) {
-          const bytes = await storage.get(job.input_snapshot.storage_key);
+          const bytes = await storage.get(job.input_snapshot.storage_key, job.input_snapshot.bytes);
           if (digest(bytes) !== job.input_snapshot.sha256)
             throw new Error('Input checksum mismatch; execution refused');
           input = bytes.toString('utf8');
@@ -161,7 +161,12 @@ export function createRunner(
             `UPDATE runs SET status='failed', validation_status='invalid', error=$2, finished_at=now(), lease_until=NULL WHERE id=$1 AND status='running' AND attempt=$3`,
             [
               claimed.id,
-              error instanceof Error ? error.message : 'Execution failed',
+              error instanceof Error &&
+              /^(?:Input checksum mismatch; execution refused|Execution cancelled|Execution exceeded 30-second limit|Invalid bounded Monte Carlo parameters|Unsupported workflow|CSV headers must be non-empty, unique, and safe property names|Selected column does not exist in the CSV|CSV exceeds 100,000-row workflow limit|Selected column contains non-numeric values|Values must be finite and within ±1e100|Selected column has no valid numeric observations|Project artifact storage quota reached; contact the project owner|CSV input is malformed or exceeds parser limits)$/.test(
+                error.message,
+              )
+                ? error.message
+                : 'Execution failed safely; input or storage is unavailable or invalid',
               claimed.attempt,
             ],
           )

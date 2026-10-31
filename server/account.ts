@@ -26,6 +26,10 @@ export function registerAccountRoutes(
       id,
       action,
     ]);
+    await tx.query(
+      'DELETE FROM account_events WHERE user_id=$1 AND id NOT IN (SELECT id FROM account_events WHERE user_id=$1 ORDER BY created_at DESC,id DESC LIMIT 1000)',
+      [id],
+    );
   };
   async function reauthenticate(tx: Database, request: FastifyRequest, currentPassword: string) {
     const principal = user(request);
@@ -81,6 +85,7 @@ export function registerAccountRoutes(
       const hash = await hashPassword(body.newPassword);
       await tx.query('UPDATE users SET password_hash=$2 WHERE id=$1', [principal.id, hash]);
       await tx.query('DELETE FROM sessions WHERE user_id=$1', [principal.id]);
+      await tx.query('DELETE FROM recovery_codes WHERE user_id=$1', [principal.id]);
       await record(tx, principal.id, 'password.changed');
       // Rotate the current cookie only after invalidating every previous session.
       await session(reply, principal, tx);
@@ -132,12 +137,13 @@ export function registerAccountRoutes(
         if (!code) fail(400, 'Recovery details are invalid or already used');
         await tx.query('UPDATE users SET password_hash=$2 WHERE id=$1', [account.id, nextHash]);
         await tx.query('DELETE FROM sessions WHERE user_id=$1', [account.id]);
+        await tx.query('DELETE FROM recovery_codes WHERE user_id=$1', [account.id]);
         await record(tx, account.id, 'password.recovered');
       });
       return {
         ok: true,
         notice:
-          'Password reset. All previous sessions were revoked. Sign in with your new password.',
+          'Password reset. All previous sessions and recovery codes were revoked. Sign in and generate new recovery codes.',
       };
     },
   );

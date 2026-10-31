@@ -31,6 +31,12 @@ test('CSV rejects invented columns, invalid values, duplicate headers, and malfo
   );
   await assert.rejects(runComputation('csv-summary', { column: 'value' }, 'value\n1,2\n'));
 });
+test('long malformed numeric cells fail validation without ambiguous digit backtracking', async () => {
+  await assert.rejects(
+    runComputation('csv-summary', { column: 'value' }, `value\n${'9'.repeat(60000)}x\n`),
+    /non-numeric/,
+  );
+});
 test('single observation has no sample standard deviation', async () => {
   const result = await runComputation('csv-summary', { column: 'value' }, 'value\n2\n');
   assert.equal(result.sample_standard_deviation, null);

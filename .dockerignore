@@ -4,6 +4,13 @@ node_modules
 .env.*
 !.env.example
 .data
+*.pem
+*.key
+*.p12
+*.pfx
+*.dump
+*.backup
+*recovery-codes*.txt
 dist
 dist-server
 coverage

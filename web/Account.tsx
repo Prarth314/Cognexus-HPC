@@ -63,6 +63,8 @@ export function Account({
         setNotice('Profile saved.');
       }
       if (kind === 'password') {
+        setCodes([]);
+        setSaved(false);
         const response = await api<{ user: User }>('/account/password', {
           method: 'POST',
           body: json({
@@ -73,7 +75,7 @@ export function Account({
         onUser(response.user);
         form.reset();
         setNotice(
-          'Password updated. All previous sessions were revoked; this session was rotated.',
+          'Password updated. Previous sessions and recovery codes were revoked. Generate a new recovery set.',
         );
       }
       if (kind === 'codes') {

@@ -3,6 +3,24 @@ import { parentPort, workerData } from 'node:worker_threads';
 import { parse } from 'csv-parse/sync';
 
 export function executeWorkflow(workflow, parameters, input = '') {
+  if (workflow === 'csv-preview') {
+    const rows = parse(input, {
+      bom: true,
+      to: 21,
+      max_record_size: 65536,
+      skip_empty_lines: true,
+    });
+    if (rows.some((row) => row.length > 64))
+      throw new Error('CSV preview supports at most 64 columns');
+    const clipped = rows.map((row) => row.map((cell) => cell.slice(0, 512)));
+    return {
+      kind: 'table',
+      headers: clipped[0] || [],
+      rows: clipped.slice(1),
+      limited: true,
+      cellLimit: 512,
+    };
+  }
   if (workflow === 'monte-carlo-pi') {
     const { samples, seed } = parameters;
     if (
@@ -49,7 +67,11 @@ export function executeWorkflow(workflow, parameters, input = '') {
     columns(values) {
       if (
         new Set(values).size !== values.length ||
-        values.some((v) => !v.trim() || ['__proto__', 'constructor', 'prototype'].includes(v))
+        values.length > 128 ||
+        values.some(
+          (v) =>
+            v.length > 128 || !v.trim() || ['__proto__', 'constructor', 'prototype'].includes(v),
+        )
       )
         throw new Error('CSV headers must be non-empty, unique, and safe property names');
       headers = values;
@@ -69,7 +91,7 @@ export function executeWorkflow(workflow, parameters, input = '') {
       missing++;
       continue;
     }
-    if (!/^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(raw))
+    if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(raw))
       throw new Error('Selected column contains non-numeric values');
     const value = Number(raw);
     if (!Number.isFinite(value) || Math.abs(value) > 1e100)
@@ -108,7 +130,11 @@ if (parentPort) {
   } catch (error) {
     parentPort.postMessage({
       ok: false,
-      error: error instanceof Error ? error.message : 'Execution failed',
+      error: error?.code?.startsWith('CSV_')
+        ? 'CSV input is malformed or exceeds parser limits'
+        : error instanceof Error
+          ? error.message
+          : 'Execution failed',
     });
   }
 }
