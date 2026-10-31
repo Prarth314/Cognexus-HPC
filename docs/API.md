@@ -6,30 +6,32 @@ The operator-only `/metrics` endpoint is an exception to browser cookie authenti
 
 Errors return `{ error, requestId? }`; validation errors include field details. Foreign project resources return 404. Insufficient roles return 403. Limits return 429. Lists are currently bounded, not paginated.
 
-| Method     | Route                           | Access / purpose                                                   |
-| ---------- | ------------------------------- | ------------------------------------------------------------------ |
-| GET        | `/health`                       | Database health, version, execution mode                           |
-| GET        | `/session`                      | Current user, registration/AI availability                         |
-| POST       | `/auth/register`                | `{name,email,password,signupCode?}`; minimum 12-character password |
-| POST       | `/auth/login`                   | `{email,password}`                                                 |
-| POST       | `/auth/logout`                  | Revoke current database session                                    |
-| GET        | `/workflows`                    | Authenticated reference workflow contracts                         |
-| GET / POST | `/projects`                     | List memberships / create `{name,description,domain}`              |
-| PATCH      | `/projects/:id`                 | Owner; update project metadata                                     |
-| GET        | `/projects/:id/members`         | Project members                                                    |
-| PATCH      | `/projects/:id/members/:userId` | Owner; `{role}`                                                    |
-| DELETE     | `/projects/:id/members/:userId` | Owner; remove access, protect last owner                           |
-| POST       | `/projects/:id/invitations`     | Owner; `{email,role}`; returns one-time private token              |
-| POST       | `/invitations/accept`           | Authenticated recipient; `{token}`                                 |
-| GET        | `/projects/:id/audit`           | Last 100 project audit events                                      |
-| GET / POST | `/projects/:id/files`           | List files / multipart upload with one `file` part                 |
-| GET        | `/files/:id/download`           | Authorized integrity-verified attachment                           |
-| GET        | `/files/:id/preview`            | Authorized bounded CSV/text/JSON/log/Markdown preview              |
-| GET / POST | `/projects/:id/runs`            | List last 200 / submit validated workload                          |
-| GET        | `/runs/:id`                     | Current run state and recorded result                              |
-| POST       | `/runs/:id/cancel`              | Collaborator/owner; cancel queued/running run                      |
-| GET        | `/runs/:id/manifest`            | Execution manifest with input/output checksums                     |
-| GET / POST | `/runs/:id/analyses`            | Read explanations / ask `{question}` with configured AI            |
+| Method     | Route                                     | Access / purpose                                                   |
+| ---------- | ----------------------------------------- | ------------------------------------------------------------------ |
+| GET        | `/health`                                 | Database health, version, execution mode                           |
+| GET        | `/session`                                | Current user, registration/AI availability                         |
+| POST       | `/auth/register`                          | `{name,email,password,signupCode?}`; minimum 12-character password |
+| POST       | `/auth/login`                             | `{email,password}`                                                 |
+| POST       | `/auth/logout`                            | Revoke current database session                                    |
+| GET        | `/workflows`                              | Authenticated reference workflow contracts                         |
+| GET / POST | `/projects`                               | List memberships / create `{name,description,domain}`              |
+| PATCH      | `/projects/:id`                           | Owner; update project metadata                                     |
+| GET        | `/projects/:id/members`                   | Project members                                                    |
+| PATCH      | `/projects/:id/members/:userId`           | Owner; `{role}`                                                    |
+| DELETE     | `/projects/:id/members/:userId`           | Owner; remove access, protect last owner                           |
+| POST       | `/projects/:id/invitations`               | Owner; `{email,role}`; returns one-time private token              |
+| POST       | `/invitations/accept`                     | Authenticated recipient; `{token}`                                 |
+| GET        | `/projects/:id/invitations`               | Owner; pending recipient/role/expiry metadata without secrets      |
+| DELETE     | `/projects/:id/invitations/:invitationId` | Owner; revoke a pending invitation                                 |
+| GET        | `/projects/:id/audit`                     | Last 100 project audit events                                      |
+| GET / POST | `/projects/:id/files`                     | List files / multipart upload with one `file` part                 |
+| GET        | `/files/:id/download`                     | Authorized integrity-verified attachment                           |
+| GET        | `/files/:id/preview`                      | Authorized bounded CSV/text/JSON/log/Markdown preview              |
+| GET / POST | `/projects/:id/runs`                      | List last 200 / submit validated workload                          |
+| GET        | `/runs/:id`                               | Current run state and recorded result                              |
+| POST       | `/runs/:id/cancel`                        | Collaborator/owner; cancel queued/running run                      |
+| GET        | `/runs/:id/manifest`                      | Execution manifest with input/output checksums                     |
+| GET / POST | `/runs/:id/analyses`                      | Read explanations / ask `{question}` with configured AI            |
 
 ## Account and lifecycle endpoints
 

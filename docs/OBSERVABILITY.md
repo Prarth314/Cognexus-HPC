@@ -14,7 +14,7 @@ Set server-side `OPERATIONS_TOKEN` to a random secret of at least 32 characters.
 
 Metrics include completed API requests and total response duration by method/route template/status, job counts by state, oldest queued job age, worker enabled state, and last successful poll timestamp. Labels never include raw resource IDs or query strings. Request counters are process-local and reset when the application restarts; job gauges come from PostgreSQL. No latency percentiles or cluster resource utilization are inferred.
 
-The logger redacts cookie and authorization headers. Keep request bodies, recovery codes, file contents, and provider credentials out of logs. Logs and metrics still require appropriate operator access and retention.
+Request logs record route templates, methods and status, never raw URLs/query strings. Internal failures record safe error codes and request IDs rather than full error objects, SQL, paths or parser input. Cookie/authorization redaction is retained as defense in depth. Keep request bodies, recovery codes, file contents, and provider credentials out of logs. Logs and metrics still require operator access control and retention; privately review old logs produced before this hardening.
 
 ## Suggested alerts to configure externally
 

@@ -14,6 +14,10 @@ Open **http://localhost:3000**. Register a local account, create a project, and 
 
 The API listens on 127.0.0.1:3001; Vite proxies `/api`. Data persists in ignored `.data/`. Keep `PUBLIC_ORIGIN` consistent with the browser URL. Never expose development registration to the Internet.
 
+`npm run dev` starts both services and waits for API readiness before exposing the frontend. A cold embedded-database start can take several seconds. `npm run dev:web` also waits for a separately started API; use it with `npm run dev:api`, not by itself. If PORT is customized, the development proxy follows that port. Development accepts equivalent localhost/127.0.0.1 origins on the configured port; production requires the exact configured origin.
+
+If the page reports that it cannot reach the service, run the command from the `Cognexus-HPC` repository folder and inspect the API terminal output. Initial session loading retries temporary startup failures. GitHub Pages/static hosting serves frontend assets only and cannot execute this application's authenticated Node API, database or worker; opening a static build is not a working backend deployment. No Pages site or repository deployment was found during this review.
+
 ## Verify
 
 ```sh
@@ -23,7 +27,7 @@ npm run build
 npm audit --audit-level=moderate
 ```
 
-The build includes server compilation and copies the computation runtime. `npm start` serves the built application at port 3001. For a local built preview set PUBLIC_ORIGIN=http://localhost:3001 and keep NODE_ENV=development. Production mode refuses startup without HTTPS origin, PostgreSQL, and an access code.
+The build includes server compilation and copies the computation runtime. `npm start` serves the built application at port 3001. For a local built preview set PUBLIC_ORIGIN=http://localhost:3001 and keep NODE_ENV=development. Production requires an HTTPS origin and PostgreSQL using a restricted application role. Account access uses individual operator-approved enrollment.
 
 ## Container deployment
 
@@ -32,7 +36,7 @@ Install Docker/Compose on your chosen server. Configure a TLS reverse proxy to 1
 ```dotenv
 PUBLIC_ORIGIN=https://research.example.org
 POSTGRES_PASSWORD=<long-random-database-password>
-SIGNUP_CODE=<random-operator-access-code-at-least-24-characters>
+POSTGRES_ADMIN_PASSWORD=<different-long-random-bootstrap-password>
 APP_REVISION=<full-git-commit-sha>
 ```
 
@@ -44,7 +48,24 @@ docker compose ps
 docker compose logs --tail=100 app
 ```
 
-The application runs as a non-root user with dropped Linux capabilities. PostgreSQL has no published host port. The application port is loopback-only. Secure session cookies require browser HTTPS. Configure the reverse proxy to reject invalid hosts, limit request bodies to about 11 MiB, and provide TLS and edge rate limits. Fastify does not trust arbitrary forwarded IP headers; without a configured trusted-proxy design, application IP limits are shared by clients behind the same proxy. Do not enable blanket `trustProxy`.
+The application runs as a non-root user with dropped Linux capabilities. New database volumes initialize a separate `cognexus_app` role without superuser, CREATEDB, CREATEROLE or replication privileges; production startup rejects those privileges. The bootstrap admin secret is supplied only to the database container. PostgreSQL has no published host port. The application port is loopback-only. Secure session cookies require browser HTTPS. Configure the reverse proxy to reject invalid hosts, limit request bodies to about 11 MiB, and provide TLS and edge rate limits. Fastify does not trust arbitrary forwarded IP headers; without a configured trusted-proxy design, application IP limits are shared by clients behind the same proxy. Do not enable blanket `trustProxy`.
+
+### Upgrade an existing database volume
+
+Back up and test restoration before upgrading. Do not delete the database/artifact volumes. Initialization scripts run only for a new database volume. For the previous Compose layout, keep the existing bootstrap password in `POSTGRES_ADMIN_PASSWORD` and choose a new, different application password for `POSTGRES_PASSWORD`. Stop the app, recreate only the database container with the updated environment, and use an authorized admin console (`docker compose exec database psql -U cognexus -d cognexus`) to create the role and transfer application-table ownership:
+
+```sql
+\set ON_ERROR_STOP on
+\getenv app_password APP_DB_PASSWORD
+CREATE ROLE cognexus_app LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION PASSWORD :'app_password';
+GRANT CONNECT ON DATABASE cognexus TO cognexus_app;
+REVOKE CREATE ON SCHEMA public FROM PUBLIC;
+GRANT USAGE, CREATE ON SCHEMA public TO cognexus_app;
+SELECT format('ALTER TABLE %I.%I OWNER TO cognexus_app', schemaname, tablename)
+FROM pg_tables WHERE schemaname='public' \gexec
+```
+
+Use this once for the documented previous layout; inspect existing roles/ownership before adapting it to another deployment. Passwords are read from the private container environment, not pasted into SQL/history. Restart the app using the new revision, check readiness, and verify authenticated access/integrity. Migrations preserve existing data, but pre-existing accounts remain unapproved for production until the operator verifies them below. Do not automatically approve a database-wide account list.
 
 The provided Compose configuration is a single-server pilot deployment. It does not provision DNS, TLS, cloud accounts, high availability, or managed backups. A successful image build is not proof of a deployed service.
 
@@ -62,7 +83,9 @@ The optional provider integration remains isolated server-side for a future expl
 
 ## Account operations
 
-Production registration requires the shared operator-issued access code. This is for a restricted pilot, not institutional verified identity. Invitations are private one-time codes bound to the registered account email; email ownership itself is not verified. Offline single-use recovery codes, password changes, session revocation, and account-metadata export are available in Account and security. See [account operations](ACCOUNT_SECURITY.md). Email delivery/verification, account deletion, and institutional SSO remain broader-onboarding requirements. Rotate the registration code if disclosed.
+Verify the researcher's identity/email ownership out of band. Run `npm run account:enroll` locally against the intended database, or `docker compose exec app node dist-server/server/enroll-account.js` for the packaged production runtime. The interactive command accepts an email and `ISSUE` or `APPROVE`. `ISSUE` generates one email-bound, single-use registration code valid for 24 hours; share it privately and enter it in the signup access-code field. Reissuing replaces the old code. `APPROVE` grants production access to an existing account only after operator identity verification; review credential/recovery safety before approving an old account. Production ignores the development-only shared SIGNUP_CODE. Enrollment codes/hashes are never exposed through a public listing API.
+
+This restricted pilot still lacks automated email verification. Invitations are private one-time codes bound to the approved account email; owners can inspect/revoke pending invitations in People. Demoting/removing an issuer or removing a recipient invalidates affected pending invitations. Offline recovery, password changes, session revocation, and account metadata export are available in Account and security. See [account operations](ACCOUNT_SECURITY.md). Email delivery, account deletion and institutional SSO/MFA remain broader-onboarding requirements.
 
 ## Health, logs, and recovery
 

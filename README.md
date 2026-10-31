@@ -100,7 +100,7 @@ npm run format:check
 npm audit --audit-level=moderate
 ```
 
-Tests cover reference calculations, deterministic execution, authorization, invitations, sessions, integrity, idempotency, quotas, cancellation, and lease recovery. CI runs the API suite against embedded PostgreSQL and PostgreSQL 17, and verifies the container build. See each run's status rather than assuming an unexecuted CI workflow has passed.
+Tests cover reference calculations, authorization, invitation revocation, account enrollment/recovery, browser session clearing, private development-server paths, bounded storage/parsing, log redaction, integrity, quotas and execution recovery. CI runs embedded/PostgreSQL suites, redacted current/history secret scanning, CodeQL and a runtime container vulnerability scan. See actual check results and the [security review](docs/SECURITY_REVIEW.md), including remaining deployment gates. Existing deployments need the [account/database upgrade instructions](docs/DEPLOYMENT.md).
 
 The compiled HTTP smoke test starts the built server in an isolated temporary directory and exercises assets, registration, project creation, actual computation, and the artifact manifest. On restricted Windows sandboxes, persistent PGlite initialization may require running this check in a normal local shell.
 
