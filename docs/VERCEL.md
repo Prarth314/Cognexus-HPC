@@ -24,6 +24,6 @@ Code, local development and public-repository CI require no paid services. A Ver
 
 ## Current verification boundary
 
-Local gateway tests cover missing configuration, HTTPS/origin validation, path escapes, cookie/CSRF forwarding, private caching, redirects, payload limits and sanitized failures. GitHub runs production-container startup with a restricted PostgreSQL role. Hosted connection and end-to-end Vercel research operations still require access to the owning Vercel team and a real persistent backend URL. Until those are configured and verified, the hosted site is a deployment that needs configuration, not a working production research service.
+Local gateway tests cover missing configuration, HTTPS/origin validation, path escapes, cookie/CSRF forwarding, private caching, redirects, payload limits and sanitized failures. GitHub runs production-container startup with a restricted PostgreSQL role. The user authorized access to the owning Vercel team; project inspection confirmed no configured environment variables, and production `/api/session` returned 404 before the routing fix. End-to-end hosted research operations still require a real persistent backend URL. Until those are configured and verified, the hosted site is a deployment that needs configuration, not a working production research service.
 
 [Vercel Node.js functions](https://vercel.com/docs/functions/runtimes/node-js), [function limits](https://vercel.com/docs/functions/limitations), [routing and rewrites](https://vercel.com/docs/routing/rewrites).
