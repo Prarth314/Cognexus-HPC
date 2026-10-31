@@ -1,26 +1,100 @@
+let sessionEpoch = 0;
+let uploadLimit = 10 * 1024 * 1024;
+export const getUploadLimit = () => uploadLimit;
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+    public code?: string,
+  ) {
+    super(message);
+  }
+}
+export function endSession() {
+  sessionEpoch++;
+  window.dispatchEvent(new Event('cognexus:session-ended'));
+}
+export function startSession() {
+  sessionEpoch++;
+}
 export async function api<T>(url: string, options: RequestInit = {}): Promise<T> {
+  const epoch = sessionEpoch;
   const form = options.body instanceof FormData;
-  const response = await fetch(`/api${url}`, {
-    ...options,
-    credentials: 'same-origin',
-    headers: {
-      'x-cognexus-request': '1',
-      ...(!form && options.body ? { 'Content-Type': 'application/json' } : {}),
-      ...options.headers,
-    },
-  });
+  let response: Response;
+  try {
+    response = await fetch(`/api${url}`, {
+      ...options,
+      credentials: 'same-origin',
+      signal: options.signal || AbortSignal.timeout(30000),
+      headers: {
+        'x-cognexus-request': '1',
+        ...(!form && options.body ? { 'Content-Type': 'application/json' } : {}),
+        ...options.headers,
+      },
+    });
+  } catch {
+    throw new ApiError(
+      'Cannot reach the Cognexus service. Check your connection and try again.',
+      0,
+    );
+  }
   if (!response.ok) {
-    const body = (await response.json().catch(() => ({ error: 'Request failed' }))) as {
+    const body = (await response.json().catch(() => ({
+      error:
+        response.status >= 500
+          ? 'The Cognexus service is starting or unavailable. Try again shortly.'
+          : 'The server did not return a valid API response.',
+    }))) as {
       error?: string;
+      code?: string;
       details?: { path: string; message: string }[];
     };
-    throw new Error(
+    if (epoch !== sessionEpoch) throw new ApiError('Session changed; request discarded', 401);
+    if (
+      response.status === 401 &&
+      response.headers.get('x-cognexus-session') === 'expired' &&
+      !url.startsWith('/auth/') &&
+      url !== '/metrics'
+    )
+      endSession();
+    throw new ApiError(
       body.details?.map((item) => `${item.path}: ${item.message}`).join('; ') ||
         body.error ||
         `Request failed (${response.status})`,
+      response.status,
+      body.code,
     );
   }
-  return response.json() as Promise<T>;
+  const declaredLimit = Number(response.headers.get('x-cognexus-max-upload-bytes'));
+  if (Number.isInteger(declaredLimit) && declaredLimit > 0 && declaredLimit <= 10 * 1024 * 1024)
+    uploadLimit = declaredLimit;
+  let data: T;
+  try {
+    data = (await response.json()) as T;
+  } catch {
+    throw new ApiError(
+      'This page cannot connect to the Cognexus backend. A static website alone cannot run the research service.',
+      502,
+    );
+  }
+  if (epoch !== sessionEpoch) throw new ApiError('Session changed; request discarded', 401);
+  return data;
+}
+export async function loadSession<T>(): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await api<T>('/session');
+    } catch (error) {
+      if (
+        !(error instanceof ApiError) ||
+        error.code === 'BACKEND_NOT_CONFIGURED' ||
+        ![0, 500, 502, 503, 504].includes(error.status) ||
+        attempt >= 4
+      )
+        throw error;
+      await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt));
+    }
+  }
 }
 export const json = (value: unknown) => JSON.stringify(value);
 export const formatDate = (date: string) =>

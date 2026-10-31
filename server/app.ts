@@ -1,4 +1,5 @@
-import Fastify, { type FastifyReply, type FastifyRequest } from 'fastify';
+import Fastify, { LogController, type FastifyReply, type FastifyRequest } from 'fastify';
+import type { Writable } from 'node:stream';
 import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
 import multipart from '@fastify/multipart';
@@ -8,7 +9,8 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { z, ZodError } from 'zod';
-import { parse } from 'csv-parse/sync';
+import { createAdmission } from './admission.js';
+import { runComputation } from './runner.js';
 import {
   registerSchema,
   loginSchema,
@@ -23,7 +25,16 @@ import {
 import { readConfig, type Config } from './config.js';
 import { openDatabase, migrate, type Database } from './db.js';
 import { createStorage, type Storage } from './storage.js';
-import { digest, hashPassword, verifyPassword, safeEqual, token } from './security.js';
+import {
+  digest,
+  hashPassword,
+  verifyPassword,
+  safeEqual,
+  token,
+  needsPasswordUpgrade,
+  safeErrorCode,
+  permitsOrigin,
+} from './security.js';
 import { createRunner } from './runner.js';
 import { HttpError, fail } from './errors.js';
 import { registerAccountRoutes } from './account.js';
@@ -33,6 +44,9 @@ import { explainResult } from './explanation.js';
 declare module 'fastify' {
   interface FastifyRequest {
     principal: User | null;
+    releaseCapacity: (() => void) | null;
+    capacityStarted: boolean;
+    capacityAbort: AbortController | null;
   }
 }
 const uuid = (value: unknown) => z.uuid().parse(value);
@@ -63,6 +77,7 @@ export async function buildApp(
     storage?: Storage;
     worker?: boolean;
     logger?: boolean;
+    logStream?: Writable;
   } = {},
 ) {
   const config = options.config || readConfig();
@@ -70,10 +85,12 @@ export async function buildApp(
   await migrate(db);
   const storage = options.storage || createStorage(config);
   const app = Fastify({
+    logController: new LogController({ disableRequestLogging: true }),
     logger:
       options.logger === false
         ? false
         : {
+            ...(options.logStream ? { stream: options.logStream } : {}),
             redact: {
               paths: ['req.headers.cookie', 'req.headers.authorization'],
               censor: '[REDACTED]',
@@ -85,8 +102,44 @@ export async function buildApp(
     trustProxy: false,
   });
   app.decorateRequest('principal', null);
+  app.decorateRequest('releaseCapacity', null);
+  app.decorateRequest('capacityStarted', false);
+  app.decorateRequest('capacityAbort', null);
+  app.addHook('onRoute', (route) => {
+    if (!/^\/api\/(?:files\/|projects\/:projectId\/files$)/.test(route.url)) return;
+    const original = route.handler;
+    route.handler = async function (request, reply) {
+      request.capacityStarted = true;
+      try {
+        return await original.call(this, request, reply);
+      } finally {
+        request.releaseCapacity?.();
+      }
+    };
+  });
+  const admit = createAdmission(4);
+  app.addHook('onResponse', async (request, reply) => {
+    request.releaseCapacity?.();
+    request.log.info(
+      {
+        route: request.routeOptions.url || 'unmatched',
+        method: request.method,
+        status: reply.statusCode,
+      },
+      'Request completed',
+    );
+  });
+  app.addHook('onRequestAbort', async (request) => {
+    request.capacityAbort?.abort();
+    if (!request.capacityStarted) request.releaseCapacity?.();
+  });
+  app.addHook('onTimeout', async (request) => {
+    request.capacityAbort?.abort();
+    if (!request.capacityStarted) request.releaseCapacity?.();
+  });
   await app.register(cookie);
   await app.register(helmet, {
+    referrerPolicy: { policy: 'no-referrer' },
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
@@ -118,23 +171,29 @@ export async function buildApp(
   const runner =
     options.worker === false
       ? undefined
-      : createRunner(db, storage, { error: (e) => app.log.error(e) });
+      : createRunner(db, storage, {
+          error: (e) => app.log.error({ code: safeErrorCode(e) }, 'Worker operation failed'),
+        });
   registerOperations(app, { db, config, workerState: () => runner?.state() });
   app.addHook('onClose', async () => {
     await runner?.stop();
     await db.close();
   });
   app.addHook('onSend', async (request, reply, payload) => {
-    if (request.url.startsWith('/api/')) reply.header('Cache-Control', 'private, no-store');
+    if (request.routeOptions.url?.startsWith('/api/'))
+      reply.header('Cache-Control', 'private, no-store');
     return payload;
   });
 
   app.addHook('onRequest', async (request) => {
-    if (!request.url.startsWith('/api/')) return;
+    if (!request.routeOptions.url?.startsWith('/api/')) return;
     if (!['GET', 'HEAD', 'OPTIONS'].includes(request.method)) {
       if (request.headers['x-cognexus-request'] !== '1')
         fail(403, 'Missing request verification header');
-      if (request.headers.origin && request.headers.origin !== config.origin)
+      if (
+        request.headers.origin &&
+        !permitsOrigin(request.headers.origin, config.origin, config.production)
+      )
         fail(403, 'Origin is not permitted');
       if (request.headers['sec-fetch-site'] === 'cross-site')
         fail(403, 'Cross-site requests are not permitted');
@@ -142,10 +201,15 @@ export async function buildApp(
     const session = request.cookies[cookieName];
     if (session && /^[a-f0-9]{64}$/.test(session)) {
       const [user] = await db.query<User>(
-        'SELECT u.id,u.name,u.email FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at > now()',
-        [digest(session)],
+        'SELECT u.id,u.name,u.email FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=$1 AND s.expires_at > now() AND (NOT $2::boolean OR u.access_approved_at IS NOT NULL)',
+        [digest(session), config.production],
       );
       request.principal = user || null;
+    }
+    if (/^\/api\/(?:files\/|projects\/:projectId\/files$)/.test(request.routeOptions.url || '')) {
+      if (!request.principal) fail(401, 'Sign in to continue');
+      request.releaseCapacity = admit();
+      request.capacityAbort = new AbortController();
     }
   });
   app.setErrorHandler((error, request, reply) => {
@@ -161,7 +225,9 @@ export async function buildApp(
         : candidate.statusCode && candidate.statusCode >= 400 && candidate.statusCode < 500
           ? candidate.statusCode
           : 500;
-    if (status === 500) request.log.error({ err: error, requestId: request.id }, 'Request failed');
+    if (status === 500)
+      request.log.error({ code: safeErrorCode(error), requestId: request.id }, 'Request failed');
+    if (status === 401 && !request.principal) reply.header('X-Cognexus-Session', 'expired');
     return reply.code(status).send({
       error: status === 500 ? 'An internal error occurred' : candidate.message,
       requestId: request.id,
@@ -211,8 +277,12 @@ export async function buildApp(
       principal.id,
     ]);
     await connection.query(
-      `INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '7 days')`,
-      [digest(value), principal.id],
+      `INSERT INTO sessions(token_hash,user_id,expires_at) VALUES($1,$2,now()+$3*interval '1 second')`,
+      [digest(value), principal.id, config.sessionSeconds],
+    );
+    await connection.query(
+      'DELETE FROM sessions WHERE user_id=$1 AND id NOT IN (SELECT id FROM sessions WHERE user_id=$1 ORDER BY created_at DESC,id DESC LIMIT 10)',
+      [principal.id],
     );
     reply.setCookie(cookieName, value, cookieOptions);
   }
@@ -233,7 +303,7 @@ export async function buildApp(
   });
   app.get('/api/session', async (request) => ({
     user: request.principal,
-    registrationRestricted: !!config.signupCode,
+    registrationRestricted: config.production || !!config.signupCode,
     aiEnabled: !!(config.allowExternalAi && config.aiKey && config.aiModel),
     execution: 'local-cpu',
   }));
@@ -242,24 +312,41 @@ export async function buildApp(
     { config: { rateLimit: { max: 5, timeWindow: '1 hour' } } },
     async (request, reply) => {
       const body = registerSchema.parse(request.body);
-      if (config.signupCode && !safeEqual(body.signupCode || '', config.signupCode))
+      if (
+        !config.production &&
+        config.signupCode &&
+        !safeEqual(body.signupCode || '', config.signupCode)
+      )
         fail(403, 'Registration requires the operator-issued access code');
+      if (config.production && !/^[a-f0-9]{64}$/.test(body.signupCode || ''))
+        fail(403, 'Registration requires an email-bound operator enrollment code');
       const id = randomUUID();
       const passwordHash = await hashPassword(body.password);
       try {
-        await db.query('INSERT INTO users(id,email,name,password_hash) VALUES($1,$2,$3,$4)', [
-          id,
-          body.email,
-          body.name,
-          passwordHash,
-        ]);
+        await db.transaction(async (tx) => {
+          if (config.production) {
+            const [enrollment] = await tx.query(
+              'UPDATE enrollment_tokens SET consumed_at=now() WHERE token_hash=$1 AND email=$2 AND expires_at>now() AND consumed_at IS NULL RETURNING id',
+              [digest(body.signupCode!), body.email],
+            );
+            if (!enrollment)
+              fail(
+                403,
+                'Enrollment code is invalid, expired, used, or addressed to a different account',
+              );
+          }
+          await tx.query(
+            'INSERT INTO users(id,email,name,password_hash,access_approved_at) VALUES($1,$2,$3,$4,CASE WHEN $5::boolean THEN now() ELSE NULL END)',
+            [id, body.email, body.name, passwordHash, config.production],
+          );
+          await session(reply, { id, name: body.name, email: body.email }, tx);
+        });
       } catch (error) {
         if ((error as { code?: string }).code === '23505')
           fail(409, 'Registration could not be completed with these details');
         throw error;
       }
       const principal = { id, name: body.name, email: body.email };
-      await session(reply, principal);
       reply.code(201);
       return { user: principal };
     },
@@ -270,12 +357,21 @@ export async function buildApp(
     async (request, reply) => {
       const body = loginSchema.parse(request.body);
       const principal = await db.transaction(async (tx) => {
-        const [account] = await tx.query<User & { password_hash: string }>(
-          'SELECT id,name,email,password_hash FROM users WHERE email=$1 FOR UPDATE',
+        const [account] = await tx.query<
+          User & { password_hash: string; access_approved_at: string | null }
+        >(
+          'SELECT id,name,email,password_hash,access_approved_at FROM users WHERE email=$1 FOR UPDATE',
           [body.email],
         );
         const valid = await verifyPassword(body.password, account?.password_hash || dummyHash);
         if (!account || !valid) fail(401, 'Email or password is incorrect');
+        if (config.production && !account.access_approved_at)
+          fail(403, 'An operator must approve this account before production access');
+        if (needsPasswordUpgrade(account.password_hash))
+          await tx.query('UPDATE users SET password_hash=$2 WHERE id=$1', [
+            account.id,
+            await hashPassword(body.password),
+          ]);
         const principal = { id: account.id, name: account.name, email: account.email };
         await session(reply, principal, tx);
         return principal;
@@ -311,6 +407,7 @@ export async function buildApp(
       body = projectSchema.parse(request.body),
       id = randomUUID();
     await db.transaction(async (tx) => {
+      await tx.query('SELECT id FROM users WHERE id=$1 FOR UPDATE', [principal.id]);
       const [{ count }] = await tx.query<{ count: number }>(
         "SELECT count(*)::int AS count FROM memberships WHERE user_id=$1 AND role='owner'",
         [principal.id],
@@ -409,6 +506,11 @@ export async function buildApp(
         target,
         body.role,
       ]);
+      if (body.role !== 'owner')
+        await tx.query(
+          'DELETE FROM invitations WHERE project_id=$1 AND created_by=$2 AND accepted_at IS NULL',
+          [id, target],
+        );
       await audit(tx, id, user(request).id, 'membership.role_changed', {
         userId: target,
         role: body.role,
@@ -435,7 +537,34 @@ export async function buildApp(
         if (count <= 1) fail(409, 'Cannot remove the last owner');
       }
       await tx.query('DELETE FROM memberships WHERE project_id=$1 AND user_id=$2', [id, target]);
+      await tx.query(
+        'DELETE FROM invitations WHERE project_id=$1 AND accepted_at IS NULL AND (created_by=$2 OR email=(SELECT email FROM users WHERE id=$2))',
+        [id, target],
+      );
       await audit(tx, id, user(request).id, 'membership.removed', { userId: target });
+    });
+    return { ok: true };
+  });
+  app.get('/api/projects/:projectId/invitations', async (request) => {
+    const id = param(request, 'projectId');
+    await access(request, id, false, true);
+    return db.query(
+      'SELECT id,email,role,expires_at FROM invitations WHERE project_id=$1 AND accepted_at IS NULL AND expires_at>now() ORDER BY expires_at',
+      [id],
+    );
+  });
+  app.delete('/api/projects/:projectId/invitations/:invitationId', async (request) => {
+    const id = param(request, 'projectId'),
+      invitation = param(request, 'invitationId');
+    await db.transaction(async (tx) => {
+      await tx.query('SELECT id FROM projects WHERE id=$1 FOR UPDATE', [id]);
+      await access(request, id, false, true, tx);
+      const rows = await tx.query(
+        'DELETE FROM invitations WHERE id=$1 AND project_id=$2 AND accepted_at IS NULL RETURNING id',
+        [invitation, id],
+      );
+      if (!rows.length) fail(404, 'Invitation not found');
+      await audit(tx, id, user(request).id, 'invitation.revoked', { invitationId: invitation });
     });
     return { ok: true };
   });
@@ -452,6 +581,15 @@ export async function buildApp(
     await db.transaction(async (tx) => {
       await tx.query('SELECT id FROM projects WHERE id=$1 FOR UPDATE', [id]);
       await access(request, id, true, true, tx);
+      await tx.query(
+        'DELETE FROM invitations WHERE project_id=$1 AND (expires_at<=now() OR (email=$2 AND accepted_at IS NULL))',
+        [id, body.email],
+      );
+      const [{ count }] = await tx.query<{ count: number }>(
+        'SELECT count(*)::int AS count FROM invitations WHERE project_id=$1 AND accepted_at IS NULL',
+        [id],
+      );
+      if (count >= 50) fail(429, 'Pending invitation limit reached');
       await tx.query(
         `INSERT INTO invitations(id,project_id,token_hash,email,role,expires_at,created_by) VALUES($1,$2,$3,$4,$5,now()+interval '48 hours',$6)`,
         [randomUUID(), id, digest(value), body.email, body.role, user(request).id],
@@ -471,8 +609,13 @@ export async function buildApp(
     const body = z.object({ token: z.string().regex(/^[a-f0-9]{64}$/) }).parse(request.body),
       principal = user(request);
     return db.transaction(async (tx) => {
-      const [invite] = await tx.query<{ id: string; project_id: string; role: Role }>(
-        'SELECT id,project_id,role FROM invitations WHERE token_hash=$1 AND email=$2 AND expires_at>now() AND accepted_at IS NULL FOR UPDATE',
+      const [invite] = await tx.query<{
+        id: string;
+        project_id: string;
+        role: Role;
+        created_by: string;
+      }>(
+        'SELECT id,project_id,role,created_by FROM invitations WHERE token_hash=$1 AND email=$2 AND expires_at>now() AND accepted_at IS NULL',
         [digest(body.token), principal.email],
       );
       if (!invite)
@@ -481,6 +624,22 @@ export async function buildApp(
         'SELECT archived_at FROM projects WHERE id=$1 FOR UPDATE',
         [invite.project_id],
       );
+      const [valid] = await tx.query(
+        "SELECT i.id FROM invitations i JOIN memberships m ON m.project_id=i.project_id AND m.user_id=i.created_by WHERE i.id=$1 AND i.accepted_at IS NULL AND i.expires_at>now() AND m.role='owner'",
+        [invite.id],
+      );
+      if (!valid) fail(404, 'Invitation is no longer available');
+      await tx.query('SELECT id FROM users WHERE id=$1 FOR UPDATE', [principal.id]);
+      const [{ joined }] = await tx.query<{ joined: number }>(
+        'SELECT count(*)::int AS joined FROM memberships WHERE user_id=$1',
+        [principal.id],
+      );
+      if (joined >= 50) fail(429, 'Account project membership limit reached');
+      const [{ count }] = await tx.query<{ count: number }>(
+        'SELECT count(*)::int AS count FROM memberships WHERE project_id=$1',
+        [invite.project_id],
+      );
+      if (count >= 100) fail(429, 'Project member limit reached');
       if (project.archived_at)
         fail(
           409,
@@ -515,11 +674,21 @@ export async function buildApp(
   app.post('/api/projects/:projectId/files', async (request, reply) => {
     const projectId = param(request, 'projectId');
     await access(request, projectId, true);
+    const [{ total, count }] = await db.query<{ total: number; count: number }>(
+      'SELECT COALESCE(sum(bytes),0)::int AS total,count(*)::int AS count FROM files WHERE project_id=$1',
+      [projectId],
+    );
+    if (total >= 250 * 1024 * 1024 || count >= 500)
+      fail(429, 'Project storage quota reached (250 MiB / 500 files)');
     const part = await request.file();
     if (!part) fail(400, 'Choose one file to upload');
     const bytes = await part.toBuffer();
     if (part.file.truncated) fail(413, 'File exceeds the 10 MiB upload limit');
-    const name = part.filename.replace(/[\x00-\x1f\x7f\\/]/g, '_').slice(0, 180);
+    const name = Array.from(
+      part.filename.normalize('NFC').replace(/[\p{Cc}\p{Cf}\p{Cs}\\/]/gu, '_'),
+    )
+      .slice(0, 180)
+      .join('');
     if (!name || !bytes.length) fail(400, 'A named, nonempty file is required');
     const id = randomUUID(),
       sha = digest(bytes);
@@ -567,14 +736,14 @@ export async function buildApp(
   }
   app.get('/api/files/:fileId/download', async (request, reply) => {
     const file = await authorizedFile(request),
-      bytes = await storage.get(file.storage_key);
+      bytes = await storage.get(file.storage_key, file.bytes);
     if (digest(bytes) !== file.sha256) fail(409, 'Artifact integrity verification failed');
     reply
       .header('Content-Type', 'application/octet-stream')
       .header('Cache-Control', 'private, no-store')
       .header(
         'Content-Disposition',
-        `attachment; filename="download"; filename*=UTF-8''${encodeURIComponent(file.name)}`,
+        `attachment; filename="download"; filename*=UTF-8''${encodeURIComponent(file.name).replace(/['()*]/g, (c) => '%' + c.charCodeAt(0).toString(16))}`,
       );
     return reply.send(bytes);
   });
@@ -585,16 +754,22 @@ export async function buildApp(
         kind: 'unsupported',
         message: 'Download this format to inspect it with an appropriate application.',
       };
-    const bytes = await storage.get(file.storage_key);
+    const bytes = await storage.get(file.storage_key, file.bytes);
     if (digest(bytes) !== file.sha256) fail(409, 'Artifact integrity verification failed');
     if (/\.csv$/i.test(file.name)) {
-      const rows = parse(bytes, {
-        bom: true,
-        to: 21,
-        max_record_size: 65536,
-        skip_empty_lines: true,
-      }) as string[][];
-      return { kind: 'table', headers: rows[0] || [], rows: rows.slice(1), limited: true };
+      try {
+        return await runComputation(
+          'csv-preview',
+          {},
+          bytes.toString('utf8'),
+          request.capacityAbort?.signal,
+        );
+      } catch {
+        fail(
+          400,
+          'CSV preview unavailable: input must have consistent rows, at most 64 columns, and bounded record sizes',
+        );
+      }
     }
     return {
       kind: 'text',
@@ -702,6 +877,8 @@ export async function buildApp(
   app.post('/api/runs/:runId/cancel', async (request) => {
     const run = await authorizedRun(request, true);
     await db.transaction(async (tx) => {
+      await tx.query('SELECT id FROM projects WHERE id=$1 FOR UPDATE', [run.project_id]);
+      await access(request, run.project_id, true, false, tx);
       const changed = await tx.query(
         `UPDATE runs SET status='cancelled',finished_at=now(),lease_until=NULL WHERE id=$1 AND status IN ('queued','running') RETURNING id`,
         [run.id],
@@ -796,16 +973,41 @@ export async function buildApp(
       );
       if (!response.ok)
         fail(502, 'Analysis provider is unavailable; your run and artifacts are unaffected');
-      const payload = (await response.json()) as {
+      const reader = response.body?.getReader();
+      if (!reader) fail(502, 'Analysis provider returned no response');
+      const chunks: Uint8Array[] = [];
+      let responseBytes = 0;
+      try {
+        for (;;) {
+          const chunk = await reader.read();
+          if (chunk.done) break;
+          responseBytes += chunk.value.byteLength;
+          if (responseBytes > 256 * 1024) {
+            await reader.cancel();
+            fail(502, 'Analysis provider response exceeded limits');
+          }
+          chunks.push(chunk.value);
+        }
+      } finally {
+        reader.releaseLock();
+      }
+      const payload = JSON.parse(Buffer.concat(chunks).toString('utf8')) as {
         candidates?: { content?: { parts?: { text?: string }[] } }[];
       };
       const answer = payload.candidates?.[0]?.content?.parts
         ?.map((part) => part.text || '')
         .join('');
-      if (!answer) fail(502, 'Analysis provider returned no explanation');
+      if (!answer || answer.length > 16000)
+        fail(502, 'Analysis provider returned an invalid explanation');
       const id = randomUUID();
       await db.transaction(async (tx) => {
+        await tx.query('SELECT id FROM projects WHERE id=$1 FOR UPDATE', [run.project_id]);
         await access(request, run.project_id, true, false, tx);
+        const [{ count }] = await tx.query<{ count: number }>(
+          'SELECT count(*)::int AS count FROM analyses WHERE run_id=$1',
+          [run.id],
+        );
+        if (count >= 100) fail(429, 'Run analysis limit reached');
         await tx.query(
           'INSERT INTO analyses(id,run_id,created_by,question,answer,model,prompt_version,evidence) VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb)',
           [

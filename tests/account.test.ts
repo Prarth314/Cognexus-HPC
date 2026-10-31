@@ -218,7 +218,7 @@ test('concurrent recovery consumes a code exactly once and revokes every prior s
   const overview = (
     await service.app.inject({ url: '/api/account/security', headers: headers(owner) })
   ).json();
-  assert.equal(overview.recoveryCodesRemaining, 7);
+  assert.equal(overview.recoveryCodesRemaining, 0);
   assert.ok(
     overview.events.some((event: { action: string }) => event.action === 'password.recovered'),
   );

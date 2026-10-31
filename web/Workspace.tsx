@@ -36,10 +36,11 @@ import {
   type RunRequest,
   type Role,
 } from '../shared/contracts';
-import { api, json, formatBytes, formatDate } from './api';
+import { api, json, formatBytes, formatDate, ApiError, getUploadLimit } from './api';
 import { Dialog } from './Dialog';
 
 type Member = User & { role: Role };
+type Invitation = { id: string; email: string; role: string; expires_at: string };
 type Audit = {
   id: string;
   actor: string;
@@ -98,6 +99,7 @@ export function Workspace({
     [inviteToken, setInviteToken] = useState('');
   const [defaults, setDefaults] = useState<RunRequest | undefined>();
   const [query, setQuery] = useState('');
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
   const canWrite = project.role !== 'viewer' && !project.archived_at;
   async function archive() {
     setBusy(true);
@@ -125,6 +127,8 @@ export function Workspace({
     setFiles(nextFiles);
     setMembers(nextMembers);
     setEvents(nextEvents);
+    if (project.role === 'owner')
+      setInvitations(await api<Invitation[]>(`/projects/${project.id}/invitations`));
   }
   useEffect(() => {
     let active = true;
@@ -144,7 +148,23 @@ export function Workspace({
           setEvents(values[3]);
         }
       } catch (error) {
-        if (active) onError((error as Error).message);
+        if (active) {
+          if (error instanceof ApiError && error.status === 404) {
+            setRuns([]);
+            setFiles([]);
+            setMembers([]);
+            setEvents([]);
+            setPreview(null);
+            setInviteToken('');
+            setSelected(null);
+            setCompare([]);
+            setComparing(false);
+            setInviting(false);
+            setCreating(false);
+            void onRefresh().catch(() => {});
+          }
+          onError((error as Error).message);
+        }
       } finally {
         if (active) {
           setLoading(false);
@@ -158,12 +178,40 @@ export function Workspace({
       clearTimeout(timeout);
     };
   }, [project.id]);
+  useEffect(() => {
+    let active = true;
+    if (tab === 'people' && project.role === 'owner')
+      void api<Invitation[]>(`/projects/${project.id}/invitations`)
+        .then((value) => {
+          if (active) setInvitations(value);
+        })
+        .catch((error) => {
+          if (active) {
+            setInvitations([]);
+            onError(error.message);
+          }
+        });
+    return () => {
+      active = false;
+    };
+  }, [tab, project.id, project.role]);
+  async function revokeInvitation(id: string) {
+    setBusy(true);
+    try {
+      await api(`/projects/${project.id}/invitations/${id}`, { method: 'DELETE' });
+      setInvitations((previous) => previous.filter((item) => item.id !== id));
+    } catch (error) {
+      onError((error as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   async function upload(event: FormEvent<HTMLInputElement>) {
     const input = event.currentTarget,
       file = input.files?.[0];
     if (!file) return;
-    if (file.size > 10 * 1024 * 1024) {
-      onError('Choose a file smaller than 10 MiB.');
+    if (file.size > getUploadLimit()) {
+      onError(`Choose a file no larger than ${formatBytes(getUploadLimit())}.`);
       input.value = '';
       return;
     }
@@ -477,7 +525,10 @@ export function Workspace({
                 <div className="empty-state">
                   <FolderOpen size={30} />
                   <h3>A home for your evidence.</h3>
-                  <p>Upload a dataset to get started. Maximum 10 MiB per file.</p>
+                  <p>
+                    Upload a dataset to get started. Maximum {formatBytes(getUploadLimit())} per
+                    file.
+                  </p>
                 </div>
               ) : (
                 <div className="table-wrap">
@@ -619,6 +670,42 @@ export function Workspace({
                   inspect evidence. The last owner is protected.
                 </span>
               </div>
+              {project.role === 'owner' && invitations.length > 0 && (
+                <section aria-label="Pending invitations">
+                  <h3>Pending invitations</h3>
+                  <div className="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Email</th>
+                          <th>Role</th>
+                          <th>Expires</th>
+                          <th />
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {invitations.map((invitation) => (
+                          <tr key={invitation.id}>
+                            <td>{invitation.email}</td>
+                            <td>{invitation.role}</td>
+                            <td>{formatDate(invitation.expires_at)}</td>
+                            <td>
+                              <button
+                                className="button secondary"
+                                disabled={busy}
+                                onClick={() => void revokeInvitation(invitation.id)}
+                              >
+                                Revoke
+                                <span className="sr-only"> invitation for {invitation.email}</span>
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              )}
             </>
           )}
           {tab === 'activity' && (

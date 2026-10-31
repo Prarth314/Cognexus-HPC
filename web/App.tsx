@@ -18,7 +18,7 @@ import {
   X,
 } from 'lucide-react';
 import type { Project, User } from '../shared/contracts';
-import { api, json } from './api';
+import { api, json, endSession, startSession, loadSession } from './api';
 import { Dialog } from './Dialog';
 import { Workspace } from './Workspace';
 import { Account, RecoverAccount } from './Account';
@@ -60,8 +60,41 @@ export default function App() {
     setProjects(await api<Project[]>('/projects'));
   }
   useEffect(() => {
+    const clear = () => {
+      setSession((previous) => (previous ? { ...previous, user: null } : previous));
+      setProjects([]);
+      setSelected(null);
+      setAccountOpen(false);
+      setCreating(false);
+      setJoining(false);
+      setQuery('');
+      setError('');
+    };
+    window.addEventListener('cognexus:session-ended', clear);
+    return () => window.removeEventListener('cognexus:session-ended', clear);
+  }, []);
+  useEffect(() => {
+    if (!session?.user) return;
     let active = true;
-    void api<Session>('/session')
+    const verify = () => {
+      if (document.visibilityState === 'hidden') return;
+      void api<Session>('/session')
+        .then((value) => {
+          if (active && !value.user) endSession();
+        })
+        .catch(() => {});
+    };
+    window.addEventListener('focus', verify);
+    document.addEventListener('visibilitychange', verify);
+    return () => {
+      active = false;
+      window.removeEventListener('focus', verify);
+      document.removeEventListener('visibilitychange', verify);
+    };
+  }, [session?.user?.id]);
+  useEffect(() => {
+    let active = true;
+    void loadSession<Session>()
       .then((value) => {
         if (active) setSession(value);
       })
@@ -83,6 +116,7 @@ export default function App() {
   async function logout() {
     try {
       await api('/auth/logout', { method: 'POST' });
+      endSession();
       setSession((previous) => (previous ? { ...previous, user: null } : null));
       setSelected(null);
       setProjects([]);
@@ -137,12 +171,46 @@ export default function App() {
     return (
       <main className="loading-page">
         <Logo />
+        {error && <h2>Research service unavailable</h2>}
         <p role="status">{error || 'Preparing your workspace…'}</p>
-        {error && <button onClick={() => location.reload()}>Try again</button>}
+        {error && (
+          <>
+            <p className="form-hint">
+              {['localhost', '127.0.0.1', '[::1]'].includes(location.hostname) ? (
+                <>
+                  Start Cognexus with <code>npm run dev</code> in the Cognexus-HPC folder.
+                </>
+              ) : (
+                <>
+                  The project owner needs to connect or restore the research service.{' '}
+                  <a
+                    href="https://github.com/Prarth314/Cognexus-HPC/blob/main/docs/VERCEL.md"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Deployment guide
+                  </a>
+                </>
+              )}
+            </p>
+            <button className="button secondary" onClick={() => location.reload()}>
+              Try again
+            </button>
+          </>
+        )}
       </main>
     );
   if (!session.user)
-    return <Auth session={session} onSession={(user) => setSession({ ...session, user })} />;
+    return (
+      <Auth
+        session={session}
+        onSession={(user) => {
+          startSession();
+          setProjects([]);
+          setSession({ ...session, user });
+        }}
+      />
+    );
   const filtered = projects.filter(
     (item) =>
       Boolean(item.archived_at) === showArchived &&
@@ -463,11 +531,7 @@ export default function App() {
           user={session.user}
           onUser={(user) => setSession({ ...session, user })}
           onClose={() => setAccountOpen(false)}
-          onSessionEnded={() => {
-            setSession({ ...session, user: null });
-            setProjects([]);
-            setSelected(null);
-          }}
+          onSessionEnded={endSession}
         />
       )}
       {creating && (

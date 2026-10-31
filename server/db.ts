@@ -1,6 +1,6 @@
 import { PGlite } from '@electric-sql/pglite';
 import pg from 'pg';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, chmod } from 'node:fs/promises';
 import path from 'node:path';
 import type { Config } from './config.js';
 
@@ -11,7 +11,7 @@ export interface Database {
 }
 
 export async function openDatabase(
-  config: Pick<Config, 'databaseUrl' | 'dataDir'>,
+  config: Pick<Config, 'databaseUrl' | 'dataDir'> & Partial<Pick<Config, 'production'>>,
   memory = false,
 ): Promise<Database> {
   if (config.databaseUrl) {
@@ -22,6 +22,20 @@ export async function openDatabase(
       statement_timeout: 10000,
       idleTimeoutMillis: 30000,
     });
+    if (config.production) {
+      try {
+        const { rows } = await pool.query(
+          'SELECT rolsuper,rolcreatedb,rolcreaterole,rolreplication FROM pg_roles WHERE rolname=current_user',
+        );
+        if (!rows.length || Object.values(rows[0]).some(Boolean))
+          throw new Error(
+            'Production database role must not have superuser, role-creation, database-creation, or replication privileges',
+          );
+      } catch (error) {
+        await pool.end();
+        throw error;
+      }
+    }
     const wrap = (client: pg.Pool | pg.PoolClient): Database => ({
       async query<T>(sql: string, params: unknown[] = []) {
         return (await client.query(sql, params)).rows as T[];
@@ -46,7 +60,10 @@ export async function openDatabase(
     });
     return wrap(pool);
   }
-  if (!memory) await mkdir(config.dataDir, { recursive: true });
+  if (!memory) {
+    await mkdir(config.dataDir, { recursive: true, mode: 0o700 });
+    if (process.platform !== 'win32') await chmod(config.dataDir, 0o700);
+  }
   const embedded = new PGlite(memory ? undefined : path.join(config.dataDir, 'db'));
   const wrap = (client: Pick<PGlite, 'query'>): Database => ({
     async query<T>(sql: string, params: unknown[] = []) {
@@ -104,6 +121,16 @@ export async function migrate(db: Database) {
         `INSERT INTO schema_migrations(version) VALUES(2)`,
       ];
       for (const statement of statements) await tx.query(statement);
+    }
+    const secured = await tx.query('SELECT version FROM schema_migrations WHERE version=3');
+    if (!secured.length) {
+      for (const sql of [
+        `ALTER TABLE users ADD COLUMN access_approved_at timestamptz`,
+        `CREATE TABLE enrollment_tokens (id uuid PRIMARY KEY,token_hash text NOT NULL UNIQUE,email text NOT NULL,expires_at timestamptz NOT NULL,consumed_at timestamptz)`,
+        `CREATE INDEX enrollment_email_idx ON enrollment_tokens(email,expires_at)`,
+        `INSERT INTO schema_migrations(version) VALUES(3)`,
+      ])
+        await tx.query(sql);
     }
   });
 }

@@ -68,7 +68,7 @@ export async function inspectStorage(
     }
     if (options.verify) {
       try {
-        const bytes = await storage.get(object.key);
+        const bytes = await storage.get(object.key, reference.bytes);
         if (digest(bytes) !== reference.sha256)
           issues.push({
             fileId: reference.id,
