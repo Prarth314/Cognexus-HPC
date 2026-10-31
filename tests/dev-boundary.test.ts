@@ -12,7 +12,7 @@ test('Vite refuses private data through direct, raw, encoded, and filesystem req
   process.env.DATA_DIR = directory;
   const server = await createServer({
     logLevel: 'silent',
-    server: { port: 0, host: '127.0.0.1', watch: null },
+    server: { port: 0, host: '127.0.0.1', watch: null, strictPort: false },
     optimizeDeps: { noDiscovery: true, include: [] },
   });
   try {
