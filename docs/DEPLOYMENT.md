@@ -1,5 +1,7 @@
 # Deployment and operations
 
+For the existing Vercel frontend, follow the [Vercel connection guide](VERCEL.md). It needs a persistent backend; the server setup below supplies that backend on an authorized host.
+
 ## Run locally
 
 Requires Node.js 22.15+ and npm. No Docker or API key is needed for local execution.

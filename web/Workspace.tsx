@@ -36,7 +36,7 @@ import {
   type RunRequest,
   type Role,
 } from '../shared/contracts';
-import { api, json, formatBytes, formatDate, ApiError } from './api';
+import { api, json, formatBytes, formatDate, ApiError, getUploadLimit } from './api';
 import { Dialog } from './Dialog';
 
 type Member = User & { role: Role };
@@ -210,8 +210,8 @@ export function Workspace({
     const input = event.currentTarget,
       file = input.files?.[0];
     if (!file) return;
-    if (file.size > 10 * 1024 * 1024) {
-      onError('Choose a file smaller than 10 MiB.');
+    if (file.size > getUploadLimit()) {
+      onError(`Choose a file no larger than ${formatBytes(getUploadLimit())}.`);
       input.value = '';
       return;
     }
@@ -525,7 +525,10 @@ export function Workspace({
                 <div className="empty-state">
                   <FolderOpen size={30} />
                   <h3>A home for your evidence.</h3>
-                  <p>Upload a dataset to get started. Maximum 10 MiB per file.</p>
+                  <p>
+                    Upload a dataset to get started. Maximum {formatBytes(getUploadLimit())} per
+                    file.
+                  </p>
                 </div>
               ) : (
                 <div className="table-wrap">

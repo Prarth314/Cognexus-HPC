@@ -171,12 +171,27 @@ export default function App() {
     return (
       <main className="loading-page">
         <Logo />
+        {error && <h2>Research service unavailable</h2>}
         <p role="status">{error || 'Preparing your workspace…'}</p>
         {error && (
           <>
             <p className="form-hint">
-              For local use, start Cognexus with <code>npm run dev</code> in the Cognexus-HPC
-              folder. GitHub Pages cannot run its API or database.
+              {['localhost', '127.0.0.1', '[::1]'].includes(location.hostname) ? (
+                <>
+                  Start Cognexus with <code>npm run dev</code> in the Cognexus-HPC folder.
+                </>
+              ) : (
+                <>
+                  The project owner needs to connect or restore the research service.{' '}
+                  <a
+                    href="https://github.com/Prarth314/Cognexus-HPC/blob/main/docs/VERCEL.md"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Deployment guide
+                  </a>
+                </>
+              )}
             </p>
             <button className="button secondary" onClick={() => location.reload()}>
               Try again

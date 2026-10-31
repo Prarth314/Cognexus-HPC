@@ -14,6 +14,16 @@ test('initial session retries a transient API startup failure and rejects static
           });
     assert.deepEqual(await loadSession(), { user: null, registrationRestricted: false });
     assert.equal(calls, 2);
+    calls = 0;
+    globalThis.fetch = async () => {
+      calls++;
+      return Response.json(
+        { error: 'Research service is not connected', code: 'BACKEND_NOT_CONFIGURED' },
+        { status: 503 },
+      );
+    };
+    await assert.rejects(loadSession(), /not connected/);
+    assert.equal(calls, 1);
     globalThis.fetch = async () =>
       new Response('<html>Static host</html>', { headers: { 'content-type': 'text/html' } });
     await assert.rejects(api('/session'), /static website alone/);
