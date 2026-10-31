@@ -2154,3 +2154,128 @@ td select {
   font-size: 9px;
   color: #899a7b;
 }
+.handover-intro {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin: 24px 0;
+}
+.handover-intro > div {
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e3e7e1);
+  border-radius: 16px;
+  padding: 22px;
+}
+.handover-intro svg {
+  color: var(--primary, #28685b);
+  display: block;
+  margin-bottom: 14px;
+}
+.handover-intro strong {
+  display: block;
+}
+.handover-intro p {
+  color: var(--muted, #68746c);
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 10px 0 0;
+}
+.handover-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 20px 0;
+}
+.handover-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+}
+.handover-card {
+  text-align: left;
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #e3e7e1);
+  border-radius: 16px;
+  padding: 24px;
+  cursor: pointer;
+  color: inherit;
+}
+.handover-card:hover {
+  border-color: #28685b;
+}
+.handover-card h3 {
+  margin: 18px 0 10px;
+}
+.handover-card small {
+  display: block;
+  color: var(--muted, #68746c);
+}
+.handover-card .text-link {
+  margin-top: 20px;
+}
+.handover-checklist {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.handover-checklist li {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--border, #e3e7e1);
+}
+.handover-checklist p {
+  font-size: 14px;
+  color: var(--muted, #68746c);
+  line-height: 1.5;
+  margin: 7px 0 0;
+}
+.handover-result {
+  padding: 20px;
+  border: 1px solid var(--border, #e3e7e1);
+  border-radius: 14px;
+}
+.handover-result .section-heading {
+  margin-bottom: 10px;
+}
+.handover-result td {
+  max-width: 260px;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.handover-notes {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.handover-section details summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.handover-section .disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+@media (max-width: 760px) {
+  .handover-intro {
+    grid-template-columns: 1fr;
+  }
+  .handover-checklist li {
+    flex-direction: column;
+    gap: 8px;
+  }
+}
+.handover-section .form-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.handover-toolbar label:focus-within {
+  outline: 2px solid #28685b;
+  outline-offset: 3px;
+}
+@media (max-width: 600px) {
+  .handover-section .form-row {
+    grid-template-columns: 1fr;
+  }
+}

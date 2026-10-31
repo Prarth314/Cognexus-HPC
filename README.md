@@ -20,6 +20,8 @@ A collaborative workspace for computational experiments, durable artifacts, and 
 
 Research should leave an inspectable trail. Cognexus connects a project's people, versioned inputs, execution parameters, result artifacts, and analysis so a run can be understood and repeated.
 
+**Research handovers are now available.** Freeze a completed reference experiment, inspect missing-input and implementation checks, and request a fresh verification run. Compare outputs using fixed tolerances, distinguish author reruns from different-member checks, and export/import portable datasets and reference packages. Open **Project → Handovers** or read the [handover guide](docs/HANDOVERS.md). This first version runs the two approved workflows on the existing backend; arbitrary scripts and independently provisioned environments are not supported.
+
 ![Cognexus research workspace](docs/assets/workspace.jpg)
 
 **Status: working research preview.** Real local CPU execution, durable projects, private files, and project permissions replace the original simulated prototype. This is a deployable foundation for a restricted pilot; institutional HPC integration, verified identity, independent security review, operational recovery drills, and domain validation remain release gates. No institutional deployment or performance scale is claimed.

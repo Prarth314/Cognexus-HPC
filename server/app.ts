@@ -21,6 +21,7 @@ import {
   type Role,
   type User,
   type Run,
+  type RunRequest,
 } from '../shared/contracts.js';
 import { readConfig, type Config } from './config.js';
 import { openDatabase, migrate, type Database } from './db.js';
@@ -40,6 +41,8 @@ import { HttpError, fail } from './errors.js';
 import { registerAccountRoutes } from './account.js';
 import { registerOperations } from './operations.js';
 import { explainResult } from './explanation.js';
+import { registerHandoverRoutes } from './handovers.js';
+import { engineSha256 } from './handover-evidence.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -106,7 +109,12 @@ export async function buildApp(
   app.decorateRequest('capacityStarted', false);
   app.decorateRequest('capacityAbort', null);
   app.addHook('onRoute', (route) => {
-    if (!/^\/api\/(?:files\/|projects\/:projectId\/files$)/.test(route.url)) return;
+    if (
+      !/^\/api\/(?:files\/|handovers(?:\/|$)|projects\/:projectId\/(?:files|handovers)(?:\/|$))/.test(
+        route.url,
+      )
+    )
+      return;
     const original = route.handler;
     route.handler = async function (request, reply) {
       request.capacityStarted = true;
@@ -206,7 +214,11 @@ export async function buildApp(
       );
       request.principal = user || null;
     }
-    if (/^\/api\/(?:files\/|projects\/:projectId\/files$)/.test(request.routeOptions.url || '')) {
+    if (
+      /^\/api\/(?:files\/|handovers(?:\/|$)|projects\/:projectId\/(?:files|handovers)(?:\/|$))/.test(
+        request.routeOptions.url || '',
+      )
+    ) {
       if (!request.principal) fail(401, 'Sign in to continue');
       request.releaseCapacity = admit();
       request.capacityAbort = new AbortController();
@@ -788,6 +800,87 @@ export async function buildApp(
       )
     ).map(presentRun);
   });
+  async function queueRun(
+    tx: Database,
+    request: FastifyRequest,
+    projectId: string,
+    body: RunRequest,
+    key: string,
+  ) {
+    const principal = user(request),
+      requestHash = digest(JSON.stringify(body));
+
+    await tx.query('SELECT id FROM projects WHERE id=$1 FOR UPDATE', [projectId]);
+    await access(request, projectId, true, false, tx);
+    const [existing] = await tx.query<{ id: string; request_hash: string }>(
+      'SELECT id,request_hash FROM runs WHERE project_id=$1 AND created_by=$2 AND idempotency_key=$3',
+      [projectId, principal.id, key],
+    );
+    if (existing) {
+      if (existing.request_hash !== requestHash)
+        fail(409, 'Idempotency key already belongs to different parameters');
+      return { id: existing.id, replay: true };
+    }
+    const [{ count }] = await tx.query<{ count: number }>(
+      `SELECT count(*)::int AS count FROM runs WHERE project_id=$1 AND status IN ('queued','running')`,
+      [projectId],
+    );
+    if (count >= 3) fail(429, 'Project limit reached: three active jobs');
+    const [{ daily }] = await tx.query<{ daily: number }>(
+      `SELECT count(*)::int AS daily FROM runs WHERE project_id=$1 AND created_at>now()-interval '24 hours'`,
+      [projectId],
+    );
+    if (daily >= 100) fail(429, 'Project limit reached: 100 runs per 24 hours');
+    let input: Record<string, unknown> | null = null;
+    if (body.workflow === 'csv-summary') {
+      const [file] = await tx.query<Record<string, unknown>>(
+        'SELECT id,name,bytes,sha256,storage_key FROM files WHERE id=$1 AND project_id=$2',
+        [body.inputFileId, projectId],
+      );
+      if (!file) fail(400, 'Input must belong to this project');
+      if (!String(file.name).toLowerCase().endsWith('.csv'))
+        fail(400, 'Dataset statistics requires a CSV file');
+      input = file;
+    }
+    const id = randomUUID();
+    const manifest = {
+      schemaVersion: '1.0',
+      workflow: body.workflow,
+      workflowVersion: '1.0.0',
+      engineSha256,
+      execution: 'local-cpu',
+      nodeVersion: process.version,
+      platform: process.platform,
+      architecture: process.arch,
+      revision: process.env.APP_REVISION || 'unrecorded',
+      parameters: body.parameters,
+      input: input
+        ? { id: input.id, name: input.name, bytes: input.bytes, sha256: input.sha256 }
+        : null,
+      limits: { wallSeconds: 30, workerHeapMiB: 128 },
+      scientificValidation: 'Reference workflow; output checks do not establish domain validity',
+    };
+    await tx.query(
+      `INSERT INTO runs(id,project_id,created_by,workflow,parameters,input_file_id,input_snapshot,manifest,status,idempotency_key,request_hash) VALUES($1,$2,$3,$4,$5::jsonb,$6,$7::jsonb,$8::jsonb,'queued',$9,$10)`,
+      [
+        id,
+        projectId,
+        principal.id,
+        body.workflow,
+        JSON.stringify(body.parameters),
+        input?.id || null,
+        JSON.stringify(input),
+        JSON.stringify(manifest),
+        key,
+        requestHash,
+      ],
+    );
+    await audit(tx, projectId, principal.id, 'run.submitted', {
+      runId: id,
+      workflow: body.workflow,
+    });
+    return { id, replay: false };
+  }
   app.post('/api/projects/:projectId/runs', async (request, reply) => {
     const projectId = param(request, 'projectId'),
       principal = user(request),
@@ -798,78 +891,7 @@ export async function buildApp(
       .max(128)
       .regex(/^[a-zA-Z0-9_-]+$/)
       .parse(request.headers['idempotency-key']);
-    const requestHash = digest(JSON.stringify(body));
-    const response = await db.transaction(async (tx) => {
-      await tx.query('SELECT id FROM projects WHERE id=$1 FOR UPDATE', [projectId]);
-      await access(request, projectId, true, false, tx);
-      const [existing] = await tx.query<{ id: string; request_hash: string }>(
-        'SELECT id,request_hash FROM runs WHERE project_id=$1 AND created_by=$2 AND idempotency_key=$3',
-        [projectId, principal.id, key],
-      );
-      if (existing) {
-        if (existing.request_hash !== requestHash)
-          fail(409, 'Idempotency key already belongs to different parameters');
-        return { id: existing.id, replay: true };
-      }
-      const [{ count }] = await tx.query<{ count: number }>(
-        `SELECT count(*)::int AS count FROM runs WHERE project_id=$1 AND status IN ('queued','running')`,
-        [projectId],
-      );
-      if (count >= 3) fail(429, 'Project limit reached: three active jobs');
-      const [{ daily }] = await tx.query<{ daily: number }>(
-        `SELECT count(*)::int AS daily FROM runs WHERE project_id=$1 AND created_at>now()-interval '24 hours'`,
-        [projectId],
-      );
-      if (daily >= 100) fail(429, 'Project limit reached: 100 runs per 24 hours');
-      let input: Record<string, unknown> | null = null;
-      if (body.workflow === 'csv-summary') {
-        const [file] = await tx.query<Record<string, unknown>>(
-          'SELECT id,name,bytes,sha256,storage_key FROM files WHERE id=$1 AND project_id=$2',
-          [body.inputFileId, projectId],
-        );
-        if (!file) fail(400, 'Input must belong to this project');
-        if (!String(file.name).toLowerCase().endsWith('.csv'))
-          fail(400, 'Dataset statistics requires a CSV file');
-        input = file;
-      }
-      const id = randomUUID();
-      const manifest = {
-        schemaVersion: '1.0',
-        workflow: body.workflow,
-        workflowVersion: '1.0.0',
-        execution: 'local-cpu',
-        nodeVersion: process.version,
-        platform: process.platform,
-        architecture: process.arch,
-        revision: process.env.APP_REVISION || 'unrecorded',
-        parameters: body.parameters,
-        input: input
-          ? { id: input.id, name: input.name, bytes: input.bytes, sha256: input.sha256 }
-          : null,
-        limits: { wallSeconds: 30, workerHeapMiB: 128 },
-        scientificValidation: 'Reference workflow; output checks do not establish domain validity',
-      };
-      await tx.query(
-        `INSERT INTO runs(id,project_id,created_by,workflow,parameters,input_file_id,input_snapshot,manifest,status,idempotency_key,request_hash) VALUES($1,$2,$3,$4,$5::jsonb,$6,$7::jsonb,$8::jsonb,'queued',$9,$10)`,
-        [
-          id,
-          projectId,
-          principal.id,
-          body.workflow,
-          JSON.stringify(body.parameters),
-          input?.id || null,
-          JSON.stringify(input),
-          JSON.stringify(manifest),
-          key,
-          requestHash,
-        ],
-      );
-      await audit(tx, projectId, principal.id, 'run.submitted', {
-        runId: id,
-        workflow: body.workflow,
-      });
-      return { id, replay: false };
-    });
+    const response = await db.transaction((tx) => queueRun(tx, request, projectId, body, key));
     reply.code(response.replay ? 200 : 201);
     return response;
   });
@@ -1030,6 +1052,7 @@ export async function buildApp(
     },
   );
 
+  registerHandoverRoutes(app, { db, storage, user, access, audit, queueRun });
   const dist = path.resolve('dist');
   if (existsSync(path.join(dist, 'index.html'))) {
     await app.register(staticFiles, { root: dist, wildcard: false });

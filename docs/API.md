@@ -74,3 +74,16 @@ Submission pins input metadata/checksum and execution configuration. The worker 
 External `/analyses` requests are disabled unless deliberately enabled outside the default free-development profile. Merely setting provider credentials does not enable them.
 
 Text previews are limited to 64,000 bytes. CSV previews return the header and up to 20 data rows. Unsupported types require download. AI receives the question, parameters, calculated result, artifact names/checksums, and run identifier; no raw upload bytes are sent by this release. AI answers can be wrong and must be reviewed against their saved evidence.
+
+## Research handovers
+
+| Method     | Route                            | Purpose                                                                                                                            |
+| ---------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| GET / POST | `/projects/:id/handovers`        | Members list references; writers create `{sourceRunId,title,notes?,tolerance?:{absolute,relative}}` from a completed validated run |
+| POST       | `/projects/:id/handovers/import` | Writer-only multipart JSON package import, maximum 3 MiB                                                                           |
+| GET        | `/handovers/:id`                 | Authorized reference, integrity preflight, verification history and field comparisons                                              |
+| POST       | `/handovers/:id/verify`          | Writer-only fresh run; requires `Idempotency-Key`, normal queue/daily/storage limits apply                                         |
+| GET        | `/handovers/:id/export`          | Portable JSON package including checksum-verified input up to 2 MiB                                                                |
+| GET        | `/handovers/:id/report`          | JSON evidence report without raw input bytes                                                                                       |
+
+Archived projects allow authorized read/export but reject new handovers, imports and verifications. Different-member verification requires an account distinct from both the reference author and package creator. Imported authorship is always unverified. Missing/changed pinned files or changed workflow/parser fingerprints block replay. See [handover behavior and limitations](HANDOVERS.md).
