@@ -138,17 +138,28 @@ export function createStorage(config: Config): Storage {
       if (!Number.isInteger(limit) || limit < 0) throw new HttpError(409, 'Invalid artifact size');
       if (
         (await lstat(config.dataDir)).isSymbolicLink() ||
-        (await lstat(directory)).isSymbolicLink() ||
-        (await lstat(target)).isSymbolicLink()
+        (await lstat(directory)).isSymbolicLink()
       )
         throw new HttpError(409, 'Unsafe artifact object');
       const handle = await open(
         target,
-        constants.O_RDONLY | (process.platform === 'win32' ? 0 : constants.O_NOFOLLOW),
-      );
+        constants.O_RDONLY |
+          (process.platform === 'win32' ? 0 : constants.O_NOFOLLOW | constants.O_NONBLOCK),
+      ).catch((error: NodeJS.ErrnoException) => {
+        if (error.code === 'ELOOP') throw new HttpError(409, 'Unsafe artifact object');
+        throw error;
+      });
       try {
-        const stat = await handle.stat();
-        if (!stat.isFile() || stat.size > limit)
+        const stat = await handle.stat({ bigint: true }),
+          named = await lstat(target, { bigint: true });
+        if (
+          named.isSymbolicLink() ||
+          stat.dev !== named.dev ||
+          stat.ino !== named.ino ||
+          stat.nlink !== 1n
+        )
+          throw new HttpError(409, 'Unsafe artifact object');
+        if (!stat.isFile() || stat.size > BigInt(limit))
           throw new HttpError(409, 'Artifact exceeds its allowed size or is not a regular file');
         const chunks: Buffer[] = [];
         let total = 0;

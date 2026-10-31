@@ -1,7 +1,7 @@
 // Offline, redacted heuristic scan. Never prints matching content or credentials.
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFileSync, lstatSync } from 'node:fs';
+import { constants, openSync, closeSync, readSync, fstatSync, lstatSync } from 'node:fs';
 const patterns = [
   ['private-key', /-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----/g],
   [
@@ -73,20 +73,46 @@ for (const filename of git(['ls-files', '--cached', '--others', '--exclude-stand
   .toString('utf8')
   .split('\0')
   .filter(Boolean)) {
-  let stat;
+  let descriptor;
   try {
-    stat = lstatSync(filename);
+    descriptor = openSync(
+      filename,
+      constants.O_RDONLY |
+        (process.platform === 'win32' ? 0 : constants.O_NOFOLLOW | constants.O_NONBLOCK),
+    );
   } catch (error) {
-    if (error.code === 'ENOENT') continue;
+    if (['ENOENT', 'ELOOP'].includes(error.code)) continue;
     throw error;
   }
-  if (!stat.isFile() || stat.isSymbolicLink()) continue;
-  if (stat.size > 20 * 1024 * 1024)
-    throw new Error('Working file exceeds scan bound; manual inspection required');
-  const content = readFileSync(filename);
-  if (content.includes(0)) continue;
-  workingFiles++;
-  inspect(content.toString('utf8'), { path: filename, object: 'working-tree' });
+  try {
+    const stat = fstatSync(descriptor, { bigint: true }),
+      named = lstatSync(filename, { bigint: true });
+    if (
+      !stat.isFile() ||
+      named.isSymbolicLink() ||
+      stat.dev !== named.dev ||
+      stat.ino !== named.ino
+    )
+      continue;
+    if (stat.size > 20n * 1024n * 1024n)
+      throw new Error('Working file exceeds scan bound; manual inspection required');
+    const chunks = [];
+    let total = 0;
+    while (true) {
+      const chunk = Buffer.alloc(65536),
+        size = readSync(descriptor, chunk);
+      if (!size) break;
+      total += size;
+      if (total > 20 * 1024 * 1024) throw new Error('Working file grew beyond scan bound');
+      chunks.push(chunk.subarray(0, size));
+    }
+    const content = Buffer.concat(chunks, total);
+    if (content.includes(0)) continue;
+    workingFiles++;
+    inspect(content.toString('utf8'), { path: filename, object: 'working-tree' });
+  } finally {
+    closeSync(descriptor);
+  }
 }
 console.log(
   JSON.stringify(

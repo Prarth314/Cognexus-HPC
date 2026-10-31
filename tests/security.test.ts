@@ -1,6 +1,6 @@
 import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, mkdir, writeFile, symlink } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile, symlink, link } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { randomUUID, scryptSync } from 'node:crypto';
@@ -355,6 +355,16 @@ test('bounded storage rejects oversized objects and traversal keys', async () =>
   assert.equal((await storage.get(id, 16)).toString(), 'synthetic-object');
   await assert.rejects(storage.get(id, 2), /allowed size/);
   await assert.rejects(storage.get('../private'), /identifier/);
+});
+test('storage refuses a hard-linked object before reading its content', async () => {
+  const id = randomUUID(),
+    target = path.join(directory, 'synthetic-hardlink-target');
+  await writeFile(target, 'private fixture');
+  await link(target, path.join(directory, 'objects', id));
+  await assert.rejects(
+    createStorage(readConfig({ DATA_DIR: directory })).get(id),
+    /Unsafe artifact/,
+  );
 });
 test('storage refuses a symbolic-link object when the host permits symlink creation', async (context) => {
   const id = randomUUID(),
