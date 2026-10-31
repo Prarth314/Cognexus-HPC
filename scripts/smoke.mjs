@@ -84,8 +84,29 @@ try {
   assert.equal(result.result.samples, 10000);
   const manifest = await request(`/runs/${run.id}/manifest`);
   assert.equal(manifest.artifacts.length, 1);
+  const handover = await request(`/projects/${project.id}/handovers`, {
+    sourceRunId: run.id,
+    title: 'Compiled handover smoke',
+    notes: 'Verify the packaged runtime.',
+  });
+  const verification = await request(
+    `/handovers/${handover.id}/verify`,
+    {},
+    { 'idempotency-key': randomUUID() },
+  );
+  let evidence;
+  const verificationDeadline = Date.now() + 15000;
+  do {
+    evidence = await request(`/handovers/${handover.id}`);
+    if (evidence.verifications[0]?.status === 'matched') break;
+    await wait(200);
+  } while (Date.now() < verificationDeadline);
+  assert.equal(evidence.verifications[0]?.status, 'matched', JSON.stringify(evidence));
+  assert.equal(evidence.verifications[0]?.independent, false);
+  const portable = await request(`/handovers/${handover.id}/export`);
+  assert.equal(portable.format, 'cognexus-handover');
   console.log(
-    'Compiled HTTP smoke test passed: assets → account → project → real execution → artifact manifest.',
+    'Compiled HTTP smoke test passed: assets → account → project → execution → artifact → handover → verified rerun → portable export.',
   );
 } finally {
   const exited = new Promise((resolve) => {

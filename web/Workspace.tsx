@@ -38,6 +38,7 @@ import {
 } from '../shared/contracts';
 import { api, json, formatBytes, formatDate, ApiError, getUploadLimit } from './api';
 import { Dialog } from './Dialog';
+import { Handovers } from './Handovers';
 
 type Member = User & { role: Role };
 type Invitation = { id: string; email: string; role: string; expires_at: string };
@@ -82,7 +83,7 @@ export function Workspace({
   onError: (message: string) => void;
   onRefresh: () => Promise<void>;
 }) {
-  const [tab, setTab] = useState<'runs' | 'files' | 'people' | 'activity'>('runs');
+  const [tab, setTab] = useState<'runs' | 'files' | 'people' | 'activity' | 'handovers'>('runs');
   const [runs, setRuns] = useState<Run[]>([]),
     [files, setFiles] = useState<StoredFile[]>([]),
     [members, setMembers] = useState<Member[]>([]),
@@ -366,6 +367,7 @@ export function Workspace({
           [
             { id: 'runs', label: 'Experiments', icon: FlaskConical },
             { id: 'files', label: 'Files & artifacts', icon: FolderOpen },
+            { id: 'handovers', label: 'Handovers', icon: FileCheck2 },
             { id: 'people', label: 'People', icon: Users },
             { id: 'activity', label: 'Activity', icon: Activity },
           ] as const
@@ -388,6 +390,7 @@ export function Workspace({
         </div>
       ) : (
         <>
+          {tab === 'handovers' && <Handovers project={project} runs={runs} onError={onError} />}
           {tab === 'runs' && (
             <>
               <div className="section-heading">
