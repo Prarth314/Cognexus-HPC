@@ -271,6 +271,7 @@ test('version-one database upgrades preserve existing users and sessions and rer
       'CREATE TABLE sessions(token_hash text PRIMARY KEY,user_id uuid,expires_at timestamptz)',
     );
     await db.query('CREATE TABLE projects(id uuid PRIMARY KEY)');
+    await db.query('CREATE TABLE runs(id uuid PRIMARY KEY)');
     await db.query('INSERT INTO users(id,email) VALUES($1,$2)', [id, 'upgrade@example.org']);
     await db.query(
       `INSERT INTO sessions(token_hash,user_id,expires_at) VALUES('legacy-hash',$1,now()+interval '1 day')`,

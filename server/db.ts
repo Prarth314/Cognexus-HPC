@@ -132,5 +132,14 @@ export async function migrate(db: Database) {
       ])
         await tx.query(sql);
     }
+    if (!(await tx.query('SELECT version FROM schema_migrations WHERE version=4')).length) {
+      for (const sql of [
+        `CREATE TABLE handovers(id uuid PRIMARY KEY,project_id uuid NOT NULL REFERENCES projects(id),source_run_id uuid REFERENCES runs(id),created_by uuid NOT NULL REFERENCES users(id),reference_author uuid REFERENCES users(id),title text NOT NULL,notes text NOT NULL,snapshot jsonb NOT NULL,snapshot_hash text NOT NULL,origin text NOT NULL CHECK(origin IN ('native','imported')),created_at timestamptz NOT NULL DEFAULT now())`,
+        `CREATE INDEX handovers_project_idx ON handovers(project_id,created_at)`,
+        `CREATE TABLE handover_checks(id uuid PRIMARY KEY,handover_id uuid NOT NULL REFERENCES handovers(id),run_id uuid NOT NULL UNIQUE REFERENCES runs(id),created_by uuid NOT NULL REFERENCES users(id),idempotency_key text NOT NULL,created_at timestamptz NOT NULL DEFAULT now(),UNIQUE(handover_id,created_by,idempotency_key))`,
+        `INSERT INTO schema_migrations(version) VALUES(4)`,
+      ])
+        await tx.query(sql);
+    }
   });
 }
