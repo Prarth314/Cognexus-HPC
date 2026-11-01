@@ -444,7 +444,7 @@ test('structured request logs exclude raw query strings, cookies, bodies, and ar
       url: `/api/files/${id}/download`,
       headers: headers(owner),
     });
-    assert.equal(response.statusCode, 500);
+    assert.equal(response.statusCode, 503);
     assert.ok(!response.body.includes(marker));
   } finally {
     service.storage.get = get;

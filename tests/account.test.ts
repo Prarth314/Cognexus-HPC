@@ -5,7 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { buildApp } from '../server/app.js';
 import { readConfig } from '../server/config.js';
-import { openDatabase, migrate } from '../server/db.js';
+import { openDatabase, migrate, type Database } from '../server/db.js';
+import pg from 'pg';
 import { randomUUID } from 'node:crypto';
 
 let service: Awaited<ReturnType<typeof buildApp>>, directory: string;
@@ -257,7 +258,41 @@ test('revoke-other-sessions preserves this session and current session can be si
   );
 });
 test('version-one database upgrades preserve existing users and sessions and rerun safely', async () => {
-  const db = await openDatabase(readConfig({ DATA_DIR: directory }), true),
+  async function legacyDatabase(): Promise<Database> {
+    if (!process.env.TEST_DATABASE_URL)
+      return openDatabase(readConfig({ DATA_DIR: directory }), true);
+    const connection = new pg.Client({ connectionString: process.env.TEST_DATABASE_URL });
+    await connection.connect();
+    const schema = 'upgrade_fixture_' + randomUUID().replaceAll('-', '');
+    assert.match(schema, /^upgrade_fixture_[a-f0-9]{32}$/);
+    await connection.query(`CREATE SCHEMA "${schema}"`);
+    await connection.query(`SET search_path TO "${schema}"`);
+    const wrapper: Database = {
+      async query(sql, params) {
+        return (await connection.query(sql, params)).rows;
+      },
+      async transaction(fn) {
+        await connection.query('BEGIN');
+        try {
+          const result = await fn(wrapper);
+          await connection.query('COMMIT');
+          return result;
+        } catch (error) {
+          await connection.query('ROLLBACK');
+          throw error;
+        }
+      },
+      async close() {
+        try {
+          await connection.query(`DROP SCHEMA "${schema}" CASCADE`);
+        } finally {
+          await connection.end();
+        }
+      },
+    };
+    return wrapper;
+  }
+  const db = await legacyDatabase(),
     id = randomUUID();
   try {
     await db.query(

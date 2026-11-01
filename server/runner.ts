@@ -14,9 +14,14 @@ export async function runComputation(
   parameters: unknown,
   input: string,
   signal?: AbortSignal,
+  options: { timeoutMs?: number; workerUrl?: URL } = {},
 ): Promise<Record<string, unknown>> {
+  const timeoutMs = options.timeoutMs ?? 30_000;
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 30_000)
+    throw new Error('Invalid execution timeout');
   return new Promise((resolve, reject) => {
-    const worker = new Worker(new URL('./compute.mjs', import.meta.url), {
+    // Internal test seam only; HTTP requests cannot select worker code or limits.
+    const worker = new Worker(options.workerUrl ?? new URL('./compute.mjs', import.meta.url), {
       workerData: { workflow, parameters, input },
       resourceLimits: { maxOldGenerationSizeMb: 128 },
       execArgv: [],
@@ -33,8 +38,8 @@ export async function runComputation(
     };
     const abort = () => finish(new Error('Execution cancelled'));
     const timeout = setTimeout(
-      () => finish(new Error('Execution exceeded 30-second limit')),
-      30_000,
+      () => finish(new Error('Execution exceeded configured time limit')),
+      timeoutMs,
     );
     worker.once('message', (message) =>
       finish(message.ok ? undefined : new Error(message.error), message.result),
@@ -52,6 +57,7 @@ export function createRunner(
   db: Database,
   storage: Storage,
   log: { error: (error: unknown) => void },
+  options: { compute?: typeof runComputation; automaticPolling?: boolean } = {},
 ) {
   let stopped = false,
     busy = false;
@@ -67,7 +73,7 @@ export function createRunner(
       // Only pure local workloads may be replayed after lease expiry. External schedulers
       // require reconciliation and must not be added to this automatic retry path.
       await db.query(
-        `UPDATE runs SET status=CASE WHEN attempt >= 3 THEN 'failed' ELSE 'queued' END, error=CASE WHEN attempt >= 3 THEN 'Worker recovery limit exceeded' ELSE NULL END, finished_at=CASE WHEN attempt >= 3 THEN now() ELSE NULL END WHERE status='running' AND lease_until < now()`,
+        `UPDATE runs SET status=CASE WHEN attempt >= 3 THEN 'failed' ELSE 'queued' END, validation_status=CASE WHEN attempt >= 3 THEN 'invalid' ELSE 'pending' END, error=CASE WHEN attempt >= 3 THEN 'Worker recovery limit exceeded' ELSE NULL END, finished_at=CASE WHEN attempt >= 3 THEN now() ELSE NULL END, lease_until=NULL WHERE status='running' AND lease_until < now()`,
       );
       claimed = await db.transaction(async (tx) => {
         const [candidate] = await tx.query<ClaimedRun>(
@@ -100,17 +106,19 @@ export function createRunner(
             throw new Error('Input checksum mismatch; execution refused');
           input = bytes.toString('utf8');
         }
-        const result = await runComputation(
+        const computationStarted = performance.now();
+        const result = await (options.compute ?? runComputation)(
           job.workflow,
           job.parameters,
           input,
           active.abort.signal,
         );
+        const computeMilliseconds = performance.now() - computationStarted;
         const artifact = Buffer.from(JSON.stringify(result, null, 2));
         const artifactId = randomUUID();
-        await storage.put(artifactId, artifact);
         let retained = false;
         try {
+          await storage.put(artifactId, artifact);
           retained = await db.transaction(async (tx) => {
             await tx.query('SELECT id FROM projects WHERE id=$1 FOR UPDATE', [job.project_id]);
             const [{ total, count }] = await tx.query<{ total: number; count: number }>(
@@ -120,8 +128,13 @@ export function createRunner(
             if (total + artifact.length > 250 * 1024 * 1024 || count >= 500)
               throw new Error('Project artifact storage quota reached; contact the project owner');
             const rows = await tx.query(
-              `UPDATE runs SET status='succeeded', validation_status='valid', result=$2::jsonb, finished_at=now(), lease_until=NULL, logs=logs || E'\nOutput schema validated; scientific validity requires domain review.' WHERE id=$1 AND status='running' AND attempt=$3 RETURNING id`,
-              [job.id, JSON.stringify(result), job.attempt],
+              `UPDATE runs SET status='succeeded', validation_status='valid', result=$2::jsonb, manifest=jsonb_set(manifest,'{timings}',$4::jsonb), finished_at=now(), lease_until=NULL, logs=logs || E'\nOutput schema validated; scientific validity requires domain review.' WHERE id=$1 AND status='running' AND attempt=$3 RETURNING id`,
+              [
+                job.id,
+                JSON.stringify(result),
+                job.attempt,
+                JSON.stringify({ computeMilliseconds }),
+              ],
             );
             if (!rows.length) return false;
             await tx.query(
@@ -162,7 +175,7 @@ export function createRunner(
             [
               claimed.id,
               error instanceof Error &&
-              /^(?:Input checksum mismatch; execution refused|Execution cancelled|Execution exceeded 30-second limit|Invalid bounded Monte Carlo parameters|Unsupported workflow|CSV headers must be non-empty, unique, and safe property names|Selected column does not exist in the CSV|CSV exceeds 100,000-row workflow limit|Selected column contains non-numeric values|Values must be finite and within ±1e100|Selected column has no valid numeric observations|Project artifact storage quota reached; contact the project owner|CSV input is malformed or exceeds parser limits)$/.test(
+              /^(?:Input checksum mismatch; execution refused|Execution cancelled|Execution exceeded configured time limit|Invalid bounded Monte Carlo parameters|Unsupported workflow|CSV headers must be non-empty, unique, and safe property names|Selected column does not exist in the CSV|CSV exceeds 100,000-row workflow limit|Selected column contains non-numeric values|Values must be finite and within ±1e100|Selected column has no valid numeric observations|Project artifact storage quota reached; contact the project owner|CSV input is malformed or exceeds parser limits)$/.test(
                 error.message,
               )
                 ? error.message
@@ -177,7 +190,7 @@ export function createRunner(
     }
   }
   const timer = setInterval(() => {
-    if (!busy && !stopped) inFlight = tick();
+    if (options.automaticPolling !== false && !busy && !stopped) inFlight = tick();
   }, 1000);
   timer.unref();
   return {
