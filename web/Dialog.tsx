@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useId, type ReactNode } from 'react';
 import { X } from 'lucide-react';
 
 export function Dialog({
@@ -13,11 +13,16 @@ export function Dialog({
   wide?: boolean;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
   useEffect(() => {
+    const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const element = ref.current;
     element?.showModal();
     element?.querySelector<HTMLElement>('input,select,textarea')?.focus();
-    return () => element?.close();
+    return () => {
+      element?.close();
+      if (previous?.isConnected) previous.focus();
+    };
   }, []);
   return (
     <dialog
@@ -27,10 +32,10 @@ export function Dialog({
         event.preventDefault();
         onClose();
       }}
-      aria-labelledby="dialog-title"
+      aria-labelledby={titleId}
     >
       <header className="dialog-head">
-        <h2 id="dialog-title">{title}</h2>
+        <h2 id={titleId}>{title}</h2>
         <button className="icon-button" aria-label="Close dialog" onClick={onClose}>
           <X size={20} />
         </button>

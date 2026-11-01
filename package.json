@@ -19,6 +19,10 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "smoke": "node scripts/smoke.mjs",
+    "test:browser": "playwright test",
+    "restore:drill": "node scripts/restore-drill.mjs",
+    "benchmark": "node scripts/benchmark.mjs",
+    "backup:offline": "node scripts/offline-backup.mjs",
     "storage:inspect": "tsx server/inspect-storage.ts",
     "account:enroll": "tsx server/enroll-account.ts",
     "security:scan": "node scripts/security-scan.mjs"
@@ -45,6 +49,8 @@
     }
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
+    "@playwright/test": "^1.64.1",
     "@types/node": "^22.14.0",
     "@types/pg": "^8.0.0",
     "@types/react": "^19.0.0",

@@ -47,7 +47,26 @@ jobs:
       - run: npm run build
       - run: npm run smoke
         if: matrix.database == 'embedded'
+      - name: Compiled restart and disposable coordinated restore drill
+        run: npm run restore:drill
+        env:
+          PILOT_POSTGRES_CONTAINER: ${{ matrix.database == 'postgres' && job.services.postgres.id || '' }}
+          PILOT_POSTGRES_ADMIN_URL: ${{ matrix.database == 'postgres' && 'postgresql://cognexus:ci-only-password@127.0.0.1:5432/cognexus_test' || '' }}
       - run: npm audit --audit-level=moderate
+  browser:
+    name: Built browser journey and accessibility
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - run: npm run test:browser
+      - name: Bounded synthetic benchmark (measurements, no performance threshold claim)
+        run: npm run benchmark
   container:
     name: Verify production container builds
     runs-on: ubuntu-latest
