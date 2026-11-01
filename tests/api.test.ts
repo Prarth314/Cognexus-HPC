@@ -408,6 +408,7 @@ test('recovery is bounded and exhausted runs become terminal', async () => {
   });
   assert.equal(response.json().status, 'failed');
   assert.match(response.json().error, /recovery limit/);
+  assert.equal(response.json().validation_status, 'invalid');
 });
 test('corrupted inputs fail integrity validation instead of producing scientific output', async () => {
   const original = await service.storage.get(fileId);

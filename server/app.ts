@@ -732,6 +732,17 @@ export async function buildApp(
     reply.code(201);
     return { id, sha256: sha };
   });
+  async function readArtifact(file: { storage_key: string; bytes: number }) {
+    try {
+      return await storage.get(file.storage_key, file.bytes);
+    } catch (error) {
+      if (error instanceof HttpError) throw error;
+      fail(
+        503,
+        'Artifact unavailable. Ask the project owner to check storage and restore the matching backup.',
+      );
+    }
+  }
   async function authorizedFile(request: FastifyRequest) {
     const [file] = await db.query<{
       id: string;
@@ -748,7 +759,7 @@ export async function buildApp(
   }
   app.get('/api/files/:fileId/download', async (request, reply) => {
     const file = await authorizedFile(request),
-      bytes = await storage.get(file.storage_key, file.bytes);
+      bytes = await readArtifact(file);
     if (digest(bytes) !== file.sha256) fail(409, 'Artifact integrity verification failed');
     reply
       .header('Content-Type', 'application/octet-stream')
@@ -766,7 +777,7 @@ export async function buildApp(
         kind: 'unsupported',
         message: 'Download this format to inspect it with an appropriate application.',
       };
-    const bytes = await storage.get(file.storage_key, file.bytes);
+    const bytes = await readArtifact(file);
     if (digest(bytes) !== file.sha256) fail(409, 'Artifact integrity verification failed');
     if (/\.csv$/i.test(file.name)) {
       try {

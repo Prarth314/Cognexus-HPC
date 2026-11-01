@@ -79,6 +79,9 @@ export function registerOperations(
       '# HELP cognexus_oldest_queued_seconds Age of oldest queued job.',
       '# TYPE cognexus_oldest_queued_seconds gauge',
       `cognexus_oldest_queued_seconds ${Math.max(0, Number(seconds) || 0)}`,
+      '# HELP cognexus_process_resident_memory_bytes Process RSS including local worker threads; not a peak measurement.',
+      '# TYPE cognexus_process_resident_memory_bytes gauge',
+      `cognexus_process_resident_memory_bytes ${process.memoryUsage().rss}`,
     ];
     const worker = workerState();
     lines.push(

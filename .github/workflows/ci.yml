@@ -41,13 +41,48 @@ jobs:
       - run: npm run security:scan
       - run: npm run check
       - run: npm run format:check
+      - name: Assert real PostgreSQL profile and UTF-8 encoding
+        if: matrix.database == 'postgres'
+        env:
+          TEST_DATABASE_URL: postgresql://cognexus:ci-only-password@127.0.0.1:5432/cognexus_test
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import pg from 'pg';
+          assert.ok(process.env.TEST_DATABASE_URL, 'PostgreSQL CI must not fall back to PGlite');
+          const db = new pg.Client({connectionString: process.env.TEST_DATABASE_URL});
+          await db.connect();
+          try {
+            assert.match((await db.query('SHOW server_version')).rows[0].server_version, /^17\./);
+            assert.equal((await db.query('SHOW server_encoding')).rows[0].server_encoding, 'UTF8');
+          } finally { await db.end(); }
+          JS
       - run: npm test
         env:
           TEST_DATABASE_URL: ${{ matrix.database == 'postgres' && 'postgresql://cognexus:ci-only-password@127.0.0.1:5432/cognexus_test' || '' }}
       - run: npm run build
       - run: npm run smoke
         if: matrix.database == 'embedded'
+      - name: Compiled restart and disposable coordinated restore drill
+        run: npm run restore:drill
+        env:
+          PILOT_POSTGRES_CONTAINER: ${{ matrix.database == 'postgres' && job.services.postgres.id || '' }}
+          PILOT_POSTGRES_ADMIN_URL: ${{ matrix.database == 'postgres' && 'postgresql://cognexus:ci-only-password@127.0.0.1:5432/cognexus_test' || '' }}
       - run: npm audit --audit-level=moderate
+  browser:
+    name: Built browser journey and accessibility
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - run: npm run test:browser
+      - name: Bounded synthetic benchmark (measurements, no performance threshold claim)
+        run: npm run benchmark
   container:
     name: Verify production container builds
     runs-on: ubuntu-latest

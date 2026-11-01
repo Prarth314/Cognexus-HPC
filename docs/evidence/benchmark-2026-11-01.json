@@ -1,0 +1,105 @@
+{
+  "recordedAt": "2026-11-01T16:38:17.291Z",
+  "revision": "48984a03a1ef956d25c0305d78f2b844207811c8",
+  "workingTreeDirty": true,
+  "environment": {
+    "node": "v24.15.0",
+    "platform": "win32",
+    "architecture": "x64",
+    "cpuModel": "AMD Ryzen 7 8840HS w/ Radeon 780M Graphics     ",
+    "logicalCpus": 16,
+    "totalMemoryBytes": 16419590144,
+    "topology": "One compiled Node API/worker process, persistent PGlite and disk on the same Windows/Linux host; localhost HTTP"
+  },
+  "dataset": {
+    "rows": 10000,
+    "bytes": 147902,
+    "projects": 1,
+    "uploadedVersionsAfterWarmup": 13
+  },
+  "method": {
+    "warmup": 3,
+    "requestConcurrency": 1,
+    "readConcurrencyExperiment": 3,
+    "quantiles": "Nearest rank; p95 for n=10 is the sample maximum",
+    "computation": "Worker startup and computation await only; excludes queue, input read, and output publication",
+    "execution": "Database started_at to finished_at, including publication; queue wait measured separately",
+    "throughput": "30 file-list requests in ten batches of three; no think time"
+  },
+  "distributions": {
+    "upload": {
+      "samples": 10,
+      "p50Milliseconds": 9.710399999999936,
+      "p95Milliseconds": 54.47409999999945,
+      "minMilliseconds": 8.04740000000129,
+      "maxMilliseconds": 54.47409999999945
+    },
+    "csvPreviewValidation": {
+      "samples": 10,
+      "p50Milliseconds": 41.21910000000025,
+      "p95Milliseconds": 118.58539999999994,
+      "minMilliseconds": 37.8140999999996,
+      "maxMilliseconds": 118.58539999999994
+    },
+    "submission": {
+      "samples": 10,
+      "p50Milliseconds": 6.485800000000381,
+      "p95Milliseconds": 24.854800000000978,
+      "minMilliseconds": 5.876900000001115,
+      "maxMilliseconds": 24.854800000000978
+    },
+    "queueWait": {
+      "samples": 10,
+      "p50Milliseconds": 678,
+      "p95Milliseconds": 871,
+      "minMilliseconds": 408,
+      "maxMilliseconds": 871
+    },
+    "executionThroughPublication": {
+      "samples": 10,
+      "p50Milliseconds": 62,
+      "p95Milliseconds": 175,
+      "minMilliseconds": 55,
+      "maxMilliseconds": 175
+    },
+    "computationIncludingWorkerStartup": {
+      "samples": 10,
+      "p50Milliseconds": 55.759500000000116,
+      "p95Milliseconds": 129.97439999999915,
+      "minMilliseconds": 49.755699999999706,
+      "maxMilliseconds": 129.97439999999915
+    },
+    "artifactDownload": {
+      "samples": 10,
+      "p50Milliseconds": 4.340700000000652,
+      "p95Milliseconds": 18.62960000000021,
+      "minMilliseconds": 3.4742999999998574,
+      "maxMilliseconds": 18.62960000000021
+    },
+    "projectList": {
+      "samples": 30,
+      "p50Milliseconds": 1.5950000000011642,
+      "p95Milliseconds": 2.2735000000102445,
+      "minMilliseconds": 1.3846000000048662,
+      "maxMilliseconds": 2.4069000000017695
+    },
+    "fileList": {
+      "samples": 30,
+      "p50Milliseconds": 2.559399999998277,
+      "p95Milliseconds": 3.8707999999896856,
+      "minMilliseconds": 2.049200000008568,
+      "maxMilliseconds": 4.095099999991362
+    },
+    "fileListConcurrency3": {
+      "samples": 30,
+      "p50Milliseconds": 4.198899999988498,
+      "p95Milliseconds": 7.447299999999814,
+      "minMilliseconds": 2.2707999999984168,
+      "maxMilliseconds": 8.284199999994598
+    }
+  },
+  "concurrentFileListRequestsPerSecond": 425.18332487693937,
+  "serverResidentBytesAtEnd": 304046080,
+  "errors": [],
+  "limitations": "Small synthetic single-host sample, one project, no network/TLS/production PostgreSQL or user traffic. RSS is an end sample, not peak. No scalability, before/after speedup, or production SLO claim."
+}

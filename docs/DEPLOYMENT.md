@@ -99,6 +99,8 @@ This restricted pilot still lacks automated email verification. Invitations are 
 
 ## Backup and restore drill
 
+Use the [pilot recovery runbook](PILOT_RUNBOOK.md) for bounded offline snapshot tooling, consistency requirements, official PostgreSQL dump/restore, incident actions, and `npm run restore:drill`. Automated disposable PGlite and PostgreSQL drills are available; they do not establish recovery objectives on a live deployment.
+
 Pause ingress and stop the application before taking a consistent pilot snapshot. Keep PostgreSQL running for `pg_dump`.
 
 1. Stop `app`; back up the database with `pg_dump` using a secure operator session.

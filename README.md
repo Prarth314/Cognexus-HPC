@@ -24,7 +24,9 @@ Research should leave an inspectable trail. Cognexus connects a project's people
 
 ![Cognexus research workspace](docs/assets/workspace.jpg)
 
-**Status: working research preview.** Real local CPU execution, durable projects, private files, and project permissions replace the original simulated prototype. This is a deployable foundation for a restricted pilot; institutional HPC integration, verified identity, independent security review, operational recovery drills, and domain validation remain release gates. No institutional deployment or performance scale is claimed.
+**Status: restricted-pilot engineering candidate.** Real local CPU execution, durable projects, private files, and project permissions replace the original simulated prototype. Controlled recovery tests, disposable restore drills, desktop/mobile browser verification, and a bounded benchmark make the behavior inspectable. Target-host operations, verified identity, independent security review, and domain/user validation remain release gates. No institutional deployment or production scale is claimed.
+
+Inspect the [pilot evidence report](docs/PILOT_EVIDENCE.md), follow the [synthetic demo](docs/PILOT_DEMO.md), and use the [pilot operations and recovery runbook](docs/PILOT_RUNBOOK.md). The report separates observed checks from configured CI and external requirements.
 
 ## A workspace for the full experiment
 
@@ -98,13 +100,16 @@ npm run check
 npm test
 npm run build
 npm run smoke
+npm run restore:drill
+npm run test:browser
+npm run benchmark
 npm run format:check
 npm audit --audit-level=moderate
 ```
 
 Tests cover reference calculations, authorization, invitation revocation, account enrollment/recovery, browser session clearing, private development-server paths, bounded storage/parsing, log redaction, integrity, quotas and execution recovery. CI runs embedded/PostgreSQL suites, redacted current/history secret scanning, CodeQL and a runtime container vulnerability scan. See actual check results and the [security review](docs/SECURITY_REVIEW.md), including remaining deployment gates. Existing deployments need the [account/database upgrade instructions](docs/DEPLOYMENT.md).
 
-The compiled HTTP smoke test starts the built server in an isolated temporary directory and exercises assets, registration, project creation, actual computation, and the artifact manifest. On restricted Windows sandboxes, persistent PGlite initialization may require running this check in a normal local shell.
+The compiled HTTP smoke test starts the built server in an isolated temporary directory and exercises assets, registration, project creation, actual computation, artifacts, and handover verification/export. Install the free browser with `npx playwright install chromium` before browser checks. The restore drill exercises persisted queued work across process restarts, three-account authorization, other-member verification, coordinated backup/restore and checksum-verified downloads. Benchmarks use synthetic local data and preserve default rate limits; they do not load-test the public site. On restricted Windows sandboxes, persistent PGlite initialization may require running these checks in a normal local shell.
 
 ## Deploy deliberately
 
