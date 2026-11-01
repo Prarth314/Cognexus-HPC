@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, rm, link } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { snapshot, restore } from '../scripts/lib/offline-snapshot.mjs';
@@ -43,6 +43,22 @@ test('restore rejects path traversal in a manifest before creating a destination
       JSON.stringify({ entries: [{ name: '../secret', bytes: 1, sha256: 'invalid' }] }),
     );
     await assert.rejects(restore(root, path.join(root, 'target')), /Unsafe snapshot path/);
+  } finally {
+    assert.match(path.relative(os.tmpdir(), root), /^cognexus-backup-test-[^\\/]+$/);
+    await rm(root, { recursive: true, force: true });
+  }
+});
+test('snapshot refuses hard-linked source bytes rather than copying an alternate object', async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'cognexus-backup-test-'));
+  try {
+    const source = path.join(root, 'source');
+    await mkdir(source);
+    await writeFile(path.join(root, 'original'), 'synthetic');
+    await link(path.join(root, 'original'), path.join(source, 'linked'));
+    await assert.rejects(
+      snapshot(source, path.join(root, 'backup'), 'test'),
+      /unlinked regular files/,
+    );
   } finally {
     assert.match(path.relative(os.tmpdir(), root), /^cognexus-backup-test-[^\\/]+$/);
     await rm(root, { recursive: true, force: true });

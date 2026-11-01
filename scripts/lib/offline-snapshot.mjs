@@ -1,6 +1,44 @@
-import { mkdir, readdir, lstat, readFile, copyFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, lstat, open, writeFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
 import path from 'node:path';
 import { sha256 } from './pilot-runtime.mjs';
+async function readRegular(file, limit = 64 * 1024 * 1024) {
+  // Read the opened object, not a pathname checked earlier. Bound growth while reading too.
+  const handle = await open(
+    file,
+    constants.O_RDONLY |
+      (process.platform === 'win32' ? 0 : constants.O_NOFOLLOW | constants.O_NONBLOCK),
+  );
+  try {
+    const stat = await handle.stat({ bigint: true }),
+      named = await lstat(file, { bigint: true });
+    if (
+      !stat.isFile() ||
+      named.isSymbolicLink() ||
+      stat.ino !== named.ino ||
+      stat.dev !== named.dev ||
+      stat.nlink !== 1n ||
+      stat.size > BigInt(limit)
+    )
+      throw new Error('Snapshot requires bounded unlinked regular files');
+    const chunks = [];
+    let total = 0;
+    while (true) {
+      const chunk = Buffer.alloc(Math.min(65536, limit - total + 1));
+      const { bytesRead } = await handle.read(chunk, 0, chunk.length, null);
+      if (!bytesRead) break;
+      total += bytesRead;
+      if (total > limit) throw new Error('Pilot snapshot bound exceeded');
+      chunks.push(chunk.subarray(0, bytesRead));
+    }
+    const after = await handle.stat({ bigint: true });
+    if (after.size !== stat.size || after.mtimeNs !== stat.mtimeNs || after.nlink !== 1n)
+      throw new Error('Snapshot file changed while reading');
+    return Buffer.concat(chunks, total);
+  } finally {
+    await handle.close();
+  }
+}
 // Offline disk/PGlite copy. Caller must stop EVERY writer first; this does not take a live snapshot.
 // New destination only, regular files only, bounded size, and every copied file is rechecked.
 export async function snapshot(source, destination, revision, expected) {
@@ -27,11 +65,13 @@ export async function snapshot(source, destination, revision, expected) {
           throw new Error('Pilot snapshot bound exceeded');
         const portableName = name.split(path.sep).join('/');
         if (expected && !expected.has(portableName)) throw new Error('Unlisted snapshot file');
-        await copyFile(from, to);
-        const hash = sha256(await readFile(from));
+        const bytes = await readRegular(from),
+          hash = sha256(bytes);
+        if (bytes.length !== stat.size) throw new Error('Snapshot file changed while reading');
         if (expected && expected.get(portableName) !== hash)
           throw new Error('Snapshot integrity failed during restore');
-        if (sha256(await readFile(to)) !== hash)
+        await writeFile(to, bytes, { flag: 'wx', mode: 0o600 });
+        if (sha256(await readRegular(to)) !== hash)
           throw new Error('Snapshot bytes changed during copy');
         entries.push({ name: name.split(path.sep).join('/'), bytes: stat.size, sha256: hash });
       }
@@ -56,9 +96,11 @@ export async function snapshot(source, destination, revision, expected) {
 }
 export async function restore(source, destination) {
   if ((await lstat(source)).isSymbolicLink()) throw new Error('Snapshot refuses symbolic links');
-  if ((await lstat(path.join(source, 'snapshot-manifest.json'))).size > 8 * 1024 * 1024)
-    throw new Error('Snapshot manifest too large');
-  const manifest = JSON.parse(await readFile(path.join(source, 'snapshot-manifest.json'), 'utf8'));
+  const manifest = JSON.parse(
+    (await readRegular(path.join(source, 'snapshot-manifest.json'), 8 * 1024 * 1024)).toString(
+      'utf8',
+    ),
+  );
   if (!Array.isArray(manifest.entries) || manifest.entries.length > 20000)
     throw new Error('Invalid snapshot manifest');
   let total = 0;
@@ -82,13 +124,8 @@ export async function restore(source, destination) {
     if (total > 512 * 1024 * 1024) throw new Error('Pilot snapshot bound exceeded');
     expected.set(entry.name, entry.sha256);
     const file = path.join(source, entry.name);
-    const stat = await lstat(file);
-    if (
-      !stat.isFile() ||
-      stat.isSymbolicLink() ||
-      stat.size !== entry.bytes ||
-      sha256(await readFile(file)) !== entry.sha256
-    )
+    const bytes = await readRegular(file);
+    if (bytes.length !== entry.bytes || sha256(bytes) !== entry.sha256)
       throw new Error('Snapshot integrity failed: ' + entry.name);
   }
   // Reuse the bounded copier; destination must not exist. No deletion or overwrite is supported.
