@@ -161,7 +161,18 @@ export function createRunner(
             return true;
           });
         } finally {
-          if (!retained) await storage.remove(artifactId);
+          if (!retained) {
+            // A COMMIT acknowledgment may be lost after PostgreSQL retained the artifact.
+            // Never delete a possibly committed object when the database cannot answer.
+            try {
+              const references = await db.query('SELECT id FROM files WHERE storage_key=$1', [
+                artifactId,
+              ]);
+              if (!references.length) await storage.remove(artifactId);
+            } catch (error) {
+              log.error(error);
+            }
+          }
         }
       } finally {
         clearInterval(heartbeat);

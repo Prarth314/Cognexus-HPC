@@ -199,6 +199,35 @@ test('completion transaction failure rolls back success and removes the private 
   for await (const object of service.storage.objects()) after.push(object.key);
   assert.deepEqual(after.sort(), before.sort());
 });
+test('lost commit acknowledgment preserves a committed successful artifact', async () => {
+  const id = await submit();
+  const ambiguous: Database = {
+    ...service.db,
+    async transaction(fn) {
+      let publication = false;
+      const result = await service.db.transaction((tx) =>
+        fn({
+          ...tx,
+          async query(sql, params) {
+            if (sql.includes('INSERT INTO files')) publication = true;
+            return tx.query(sql, params);
+          },
+        }),
+      );
+      if (publication) throw new Error('synthetic lost commit acknowledgment');
+      return result;
+    },
+  };
+  await execute(runner(service.storage, ambiguous));
+  assert.equal((await row(id)).status, 'succeeded');
+  const [file] = await service.db.query<{ id: string }>(
+    'SELECT id FROM files WHERE source_run_id=$1',
+    [id],
+  );
+  const response = await service.app.inject({ url: `/api/files/${file.id}/download`, headers });
+  assert.equal(response.statusCode, 200, response.body);
+  assert.equal(response.json().samples, 1000);
+});
 test('cancellation during output storage fences completion and repeated cancellation is safe', async () => {
   const id = await submit();
   const faulty: Storage = {
